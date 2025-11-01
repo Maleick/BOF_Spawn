@@ -2,7 +2,7 @@
  * @file Bof.c
  * @brief Beacon Object File for advanced process spawning and shellcode injection
  * 
- * This BOF implements sophisticated process creation and injection techniques using:
+ * This BOF implements process creation and injection techniques using:
  * - NtCreateUserProcess for process spawning
  * - PPID spoofing for parent process masquerading
  * - Multiple execution methods (RIP hijacking, gadget-based, callback)
