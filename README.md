@@ -74,6 +74,17 @@ The BOF provides extensive customization through the CNA script configuration di
 
 **Note on Process Path Format**: The BOF uses NT path format (`\??\C:\...`) for the process name. This is the native format used by `NtCreateUserProcess` and bypasses some Win32 path parsing mechanisms.
 
+## Safe Defaults (DOCS-01)
+
+Default operator posture is `strict-safe` and action-first:
+
+- **Execution method default:** `Hijack RIP Direct` (callback path is explicit opt-in).
+- **Memory posture default:** `RW->RX` transition path is preferred.
+- **RWX posture:** `RWX` is manual opt-in only.
+- **Callback gate behavior:** callback execution is blocked when `CFG-disable` is off (`callback blocked (cfg-disable is off)`).
+
+Use this default profile first, then only widen risk posture when a specific target constraint requires it.
+
 ## CNA to BOF Argument Mapping Contract
 
 The packing/parsing contract is deterministic and order-sensitive.
