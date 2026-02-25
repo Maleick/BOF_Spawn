@@ -172,14 +172,20 @@ sub preflight_validate_execution {
     $bid = $1;
     $exec_name = $2;
     $cfg_int = $3;
+    $exec_method = $4;
 
-    if ($exec_name iswm "Hijack RIP Callback" && $cfg_int == 0) {
+    if ($exec_method == -1) {
+        berror($bid, "unknown execution method '$exec_name' | next step: choose a supported execution method and retry");
+        return 0;
+    }
+
+    if ($exec_method == 3 && $cfg_int == 0) {
         berror($bid, "callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
         return 0;
     }
 
-    if ($exec_name iswm "Hijack RIP Callback" && $cfg_int == 1) {
-        println("[!] callback warning | next step: keep CFG-disable enabled for callback execution");
+    if ($exec_method == 3 && $cfg_int == 1) {
+        debug_log("callback mode precondition satisfied (cfg-disable is on)");
     }
 
     return 1;
@@ -252,14 +258,9 @@ alias spawn_beacon {
 
     debug_log("spawn_beacon preflight: blockdll=$temp_block_dll cfg=$temp_cfg_disable rwx=$temp_use_rwx exec='$exec'");
 
-    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable)) {
-        return;
-    }
-
     # Resolve execution method string to integer (no fallback)
     $temp_exec = resolve_exec_method($exec);
-    if ($temp_exec == -1) {
-        berror($1, "unknown execution method '$exec' | next step: choose a supported execution method and retry");
+    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable, $temp_exec)) {
         return;
     }
 
@@ -322,14 +323,9 @@ alias spawn_shellcode {
 
     debug_log("spawn_shellcode preflight: blockdll=$temp_block_dll cfg=$temp_cfg_disable rwx=$temp_use_rwx exec='$exec'");
 
-    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable)) {
-        return;
-    }
-
     # Resolve execution method string to integer (no fallback)
     $temp_exec = resolve_exec_method($exec);
-    if ($temp_exec == -1) {
-        berror($1, "unknown execution method '$exec' | next step: choose a supported execution method and retry");
+    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable, $temp_exec)) {
         return;
     }
 
