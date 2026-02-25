@@ -348,6 +348,11 @@ NTSTATUS	SpawnAndRun(
 		------------------- */
 	ULONG oldProtect = 0;
 
+	if (Execute == HIJACK_RIP_CALLBACK_FUNCTION && !DisableCfg) {
+		BeaconPrintf(CALLBACK_ERROR, "[!] callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
+		return STATUS_INVALID_PARAMETER;
+	}
+
 	switch (Execute) {
 		case(HIJACK_RIP_DIRECT):
 		{
