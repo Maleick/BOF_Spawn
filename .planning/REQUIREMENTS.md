@@ -21,7 +21,7 @@
 
 - [x] **TEST-01**: Build verification commands reliably produce `Bin/bof.o` for local and containerized workflows.
 - [x] **TEST-02**: Packing/parsing contract between `BOF_spawn.cna` and `Src/Bof.c::go()` is covered by repeatable regression checks.
-- [ ] **TEST-03**: Every execution method has a documented manual validation scenario with expected success and failure signals.
+- [x] **TEST-03**: Every execution method has a documented manual validation scenario with expected success and failure signals.
 
 ### Documentation & Operability
 
@@ -58,7 +58,7 @@
 | RELI-03 | Phase 2 | Complete |
 | TEST-01 | Phase 3 | Complete |
 | TEST-02 | Phase 3 | Complete |
-| TEST-03 | Phase 4 | Pending |
+| TEST-03 | Phase 4 | Complete |
 | DOCS-02 | Phase 4 | Pending |
 | DOCS-01 | Phase 5 | Pending |
 | DOCS-03 | Phase 5 | Pending |

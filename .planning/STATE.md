@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 4 context gathered
-last_updated: "2026-02-25T22:09:11.983Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-02-25T22:21:18.789Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Progress: [███████░░░] 67%
 *Updated after each plan completion*
 | Phase 03 P01 | 2min | 3 tasks | 2 files |
 | Phase 03 P02 | 2min | 3 tasks | 3 files |
+| Phase 04 P01 | 1min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Require strict preflight and artifact freshness checks in build verifier — Fail fast on stale artifacts and missing toolchain prerequisites
 - [Phase 03]: Use parser-aware extraction comparison for CNA/BOF contract checks — Detect semantic order/type drift deterministically instead of pattern-only checks
 - [Phase 03]: Provide JSON output mode and shell wrapper for contract checker — Enable deterministic CI integration and simple maintainer invocation
+- [Phase 04]: Use Direct method as mandatory baseline before gadget and callback validation — Improves regression isolation by separating baseline failures from method-specific issues
 
 ### Pending Todos
 
@@ -77,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-**Last session:** 2026-02-25T22:09:11.980Z
-**Stopped at:** Phase 4 context gathered
-**Resume file:** .planning/phases/04-execution-validation-troubleshooting/04-CONTEXT.md
+**Last session:** 2026-02-25T22:21:18.787Z
+**Stopped at:** Completed 04-01-PLAN.md
+**Resume file:** .planning/phases/04-execution-validation-troubleshooting/04-02-PLAN.md

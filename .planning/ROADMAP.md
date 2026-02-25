@@ -100,5 +100,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Safety Defaults & Contract Guardrails | 3/3 | Complete    | 2026-02-25 |
 | 2. Core Reliability Hardening | 3/3 | Complete    | 2026-02-25 |
 | 3. Build & Contract Regression Coverage | 2/2 | Complete    | 2026-02-25 |
-| 4. Execution Validation & Troubleshooting | 0/2 | Not started | - |
+| 4. Execution Validation & Troubleshooting | 1/2 | In Progress|  |
 | 5. Documentation & Map Alignment | 0/2 | Not started | - |
