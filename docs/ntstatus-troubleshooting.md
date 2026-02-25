@@ -24,6 +24,24 @@ Use this guide to map dominant BOF Spawn failure surfaces to likely causes and i
 - Context stage: `NtGetContextThread` / `NtSetContextThread` failures.
 - Final dispatch stage: `NtResumeProcess` failures.
 
+## Triage Flow
+
+Use this triage flow to keep failure handling deterministic and low-noise.
+
+1. Identify the first failure surface and capture exact error text.
+2. Match it to the dominant table above and apply the listed next step.
+3. Re-run using the same profile to confirm whether the failure is stable.
+4. If unresolved, run the baseline method (`Hijack RIP Direct`) to isolate method-specific issues from baseline runtime issues.
+5. Escalate with method, stage, and exact signal if baseline and targeted method both fail.
+
+## Unknown NTSTATUS Handling (fail-closed)
+
+If an unknown NTSTATUS is observed:
+- Treat it as a fail-closed path.
+- Capture stage context (precondition/setup/context/resume), method, and profile values.
+- Run baseline method first to establish whether the issue is global or method-specific.
+- Do not continue method hopping until baseline method behavior is known.
+
 ## Notes
 
 - Preserve exact error text when escalating an issue.
