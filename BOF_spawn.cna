@@ -140,6 +140,22 @@ sub print_policy_snapshot {
 }
 
 # ================================================================
+# HELPER: PREFLIGHT EXECUTION GUARDRAILS
+# ================================================================
+sub preflight_validate_execution {
+    $bid = $1;
+    $exec_name = $2;
+    $cfg_int = $3;
+
+    if ($exec_name iswm "Hijack RIP Callback" && $cfg_int == 0) {
+        berror($bid, "callback blocked (cfg-disable is off) | next: enable CFG-disable, then retry");
+        return 0;
+    }
+
+    return 1;
+}
+
+# ================================================================
 # HELPER: GET BOF PATH
 # ================================================================
 sub get_bof_path {
@@ -190,6 +206,10 @@ alias spawn_beacon {
     $temp_block_dll = bool_to_int($block_dll);
     $temp_cfg_disable = bool_to_int($cfg_disable);
     $temp_use_rwx = bool_to_int($use_rwx);
+
+    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable)) {
+        return;
+    }
 
     # Map execution method string to integer
     $temp_exec = 0;
@@ -262,6 +282,10 @@ alias spawn_shellcode {
     $temp_block_dll = bool_to_int($block_dll);
     $temp_cfg_disable = bool_to_int($cfg_disable);
     $temp_use_rwx = bool_to_int($use_rwx);
+
+    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable)) {
+        return;
+    }
 
     # Map execution method string to integer
     $temp_exec = 0;
