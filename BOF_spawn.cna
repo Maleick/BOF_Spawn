@@ -38,8 +38,8 @@ $working_dir = "C:\\Windows\\System32";
 $cmd_line = "C:\\Windows\\System32\\rundll32.exe";
 $block_dll = "true";
 $cfg_disable = "true";
-$use_rwx = "false";  # Changed default to false for better OpSec
-$exec = "Hijack RIP Callback";
+$use_rwx = "false";      # strict-safe default: RWX is manual opt-in
+$exec = "Hijack RIP Direct"; # strict-safe default: callback requires explicit opt-in
 
 # ================================================================
 # APPLY CONFIGURATION CALLBACK
