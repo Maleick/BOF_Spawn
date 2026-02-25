@@ -83,6 +83,8 @@ __attribute__((always_inline)) LPCWSTR NormalizeExecutableBasenameW(
  * @return TRUE if process was found, FALSE otherwise
  * 
  * @note This function uses DRAUGR_API for hook evasion on Toolhelp32 APIs
+ * @note PPID lookup enforces exact case-insensitive executable-name matching.
+ * @note Invalid PPID input or no exact match will fail closed.
  * @warning Opens a handle with PROCESS_ALL_ACCESS which may trigger detection
  */
 __attribute__((always_inline)) BOOL	GetProcessIdWithNameW(
