@@ -184,6 +184,17 @@ EnumResourceTypesW(hModule, lpEnumFunc, lParam)
 **Advantage**: Leverages legitimate callback mechanism, appears as normal Windows API usage.  
 **Detection Risk**: Low-Medium - Requires CFG disabled. NULL module handle and callback validation may trigger alerts.
 
+## Recommended Execution Method Matrix (DOCS-01)
+
+Use the same operator policy language for each method: `prereq`, `detection risk trade-off`, and `recommended` posture.
+
+| Method | prereq / gate | detection risk trade-off | recommended posture |
+|---|---|---|---|
+| Hijack RIP Direct | No gadget lookup; standard spawn/injection prereq set | Highest thread-context visibility because RIP points to non-module memory | **Recommended default baseline** for first-run validation and reproducible triage |
+| Hijack RIP Jmp Rax | Gadget `JMP RAX` must resolve in `ntdll.dll` | Lower direct-RIP signal, but gadget/register behavior can trigger heuristics | Use when Direct baseline is known-good and you need a module-backed RIP path |
+| Hijack RIP Jmp Rbx | Gadget `JMP RBX` must resolve in `ntdll.dll` | Similar to Jmp Rax with alternate register/gadget signature trade-off | Use as alternate gadget path after Direct baseline and Jmp Rax comparison |
+| Hijack RIP Callback | Callback mode selected and CFG-disable enabled, otherwise blocked by precondition gate | Callback dispatch can appear legitimate but CFG policy manipulation is high-signal | Use only when callback-specific constraints require it; treat as controlled opt-in path |
+
 ## Mitigation Policies: Benefits and Risks
 
 ### Disable CFG (Control Flow Guard)
