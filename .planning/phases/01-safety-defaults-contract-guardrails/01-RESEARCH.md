@@ -1,7 +1,7 @@
 # Phase 1: Safety Defaults & Contract Guardrails - Research
 
-**Researched:** 2026-02-25 (refresh run via --research)
-**Domain:** Cobalt Strike CNA-to-BOF safety defaults and execution contract guardrails
+**Researched:** 2026-02-25T19:34:49Z
+**Domain:** Operator-safe defaults and CNA-to-BOF contract guardrails
 **Confidence:** HIGH
 
 <user_constraints>
@@ -31,59 +31,54 @@
 <research_summary>
 ## Summary
 
-A fresh pass over `BOF_spawn.cna` and `Src/Bof.c` confirms the phase remains contract-hardening work with no new capability surface. Current defaults still conflict with the locked posture: RWX is safe-biased (`false`) but callback is still default, and callback precondition (CFG-disable) is presented as guidance instead of a hard preflight gate. This leaves room for invalid combinations to progress too far.
+Phase 1 remains a contract-hardening phase over existing BOF Spawn behavior. Current code paths in `BOF_spawn.cna` and `Src/Bof.c` already support most primitives but still leave unsafe ambiguity at the operator layer: callback remains default while callback preconditions are only documented, and execution-method mapping logic remains duplicated across aliases.
 
-The highest-leverage plan is to establish CNA as authoritative for operator-facing defaults, mapping normalization, and pre-execution guardrails, then add BOF-side fail-closed validation for callback/CFG invariants. This dual-layer approach satisfies explicit operator feedback requirements while preventing latent invalid invocation paths.
+The safest and most maintainable implementation path is to make CNA preflight logic authoritative for defaults, warnings, and mapping normalization, then enforce callback/CFG invariant again in BOF as a defensive fail-closed runtime check. This directly satisfies SAFE-01 and SAFE-02 while reducing hidden state drift risk for SAFE-03.
 
-**Primary recommendation:** centralize default policy + method mapping + preflight checks in CNA, mirror critical callback precondition check in BOF, and keep pack/parse contract documentation synchronized in code and README.
+**Primary recommendation:** centralize default profile + method mapping + preflight gating in CNA, mirror critical callback precondition in BOF, and keep pack/parse mapping documented in both source comments and README.
 </research_summary>
 
 <standard_stack>
 ## Standard Stack
 
 ### Core
-| Library / Runtime | Version | Purpose | Why Standard |
-|-------------------|---------|---------|--------------|
-| Aggressor Script (Sleep) | Cobalt Strike runtime | Dialog defaults, preflight validation, argument packing | Primary operator control plane |
-| Beacon BOF parser primitives (`BeaconDataParse`, `BeaconDataExtract`, `BeaconDataInt`) | Cobalt Strike runtime | Parse packed input inside BOF | Canonical interface for CNA->BOF argument transfer |
-| Existing Native API wrappers (`Nt*`, Draugr/VxTable) | Repo-embedded | Process/memory/thread operations | Already integrated; phase does not replace core internals |
+| Runtime / Interface | Purpose | Why Standard |
+|---------------------|---------|--------------|
+| Aggressor Script (Sleep) | Operator defaults, dialog UX, preflight gates, packing | Native operator control plane for Beacon workflows |
+| Beacon BOF parser functions (`BeaconDataParse`, `BeaconDataExtract`, `BeaconDataInt`) | Decode packed args in BOF | Canonical contract surface with Cobalt Strike |
+| Existing BOF internals (`Nt*`, Draugr/VxTable) | Process creation and execution internals | Existing subsystem; no phase scope to replace this stack |
 
 ### Supporting
-| Tool | Version | Purpose | When to Use |
-|------|---------|---------|-------------|
-| `rg` static checks | Local CLI | Validate mapping paths and contract strings | During review and regression checks |
-| README contract table | Repo docs | Keep mapping deterministic and operator-visible | When updating any field order/type/value mapping |
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `rg` | Static contract and message checks | Plan verification / regression spotting |
+| README contract table | Human-visible mapping documentation | Any mapping/type/order change |
 
 ### Alternatives Considered
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
-| CNA + BOF dual guardrail | CNA-only gating | Better UX but weaker defense if CNA path is bypassed |
-| Explicit method resolver with hard fail | Implicit fallback to method `0` | Fallback hides drift and violates SAFE-03 determinism |
-| Single pack helper shared by aliases | Duplicate mapping blocks | Duplication increases drift risk between `spawn_beacon` and `spawn_shellcode` |
-
-**Installation:**
-```bash
-# No external package additions required.
-```
+| CNA + BOF dual guardrail | BOF-only validation | Misses pre-execution operator feedback contract |
+| Explicit resolver + hard failure | Implicit default-to-0 fallback | Fallback hides mapping drift and violates SAFE-03 |
+| Shared helper for both aliases | Duplicate branch logic | Drift risk between `spawn_beacon` and `spawn_shellcode` |
 </standard_stack>
 
 <architecture_patterns>
 ## Architecture Patterns
 
 ### Pattern 1: Single-source default profile
-Keep session defaults in one CNA block and ensure both aliases consume normalized values through shared helpers.
+Default toggles are defined once and consumed uniformly by both alias command paths.
 
 ### Pattern 2: Preflight-first operator guardrails
-Validate callback/CFG and related risk posture before BOF load/pack/execute. Emit concise action-first remediation when blocked.
+Invalid callback/CFG combinations are blocked before BOF dispatch with concise remediation text.
 
-### Pattern 3: Contract lockstep between pack and parse
-Treat `bof_pack("ZZZZiiiib", ...)` field order/type as a strict interface mirrored by `go()` extraction and integer decode order.
+### Pattern 3: Contract lockstep
+`bof_pack("ZZZZiiiib", ...)` order/type is treated as strict ABI with mirrored parser ordering in `go()`.
 
 ### Anti-Patterns to Avoid
-- Duplicate method-string mapping logic in each alias.
-- Silent fallback when execution-method string is unknown.
-- Warning-only handling for callback+CFG mismatch.
-- Verbose default output that buries next action.
+- Duplicated string-to-exec mapping per alias.
+- Silent fallback for unknown execution method.
+- Callback precondition only as docs text (not enforced).
+- Verbose default-mode output that hides next action.
 </architecture_patterns>
 
 <dont_hand_roll>
@@ -91,51 +86,49 @@ Treat `bof_pack("ZZZZiiiib", ...)` field order/type as a strict interface mirror
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| BOF argument decoding | Custom parser format | Existing Beacon parser functions | Ensures Beacon compatibility |
-| Independent alias mapping paths | Per-command if/else branches | Shared resolver + shared pack helper | Prevents mapping drift |
-| Late runtime-only precondition checks | No CNA preflight | CNA preflight + BOF defensive check | Meets UX contract and fail-closed safety |
+| BOF argument parser | Custom parser protocol | Existing Beacon parser functions | Keeps runtime compatibility |
+| Alias-specific method mapping | Separate if/else mapping blocks | Shared mapping helper | Prevents drift and hidden divergence |
+| Runtime-only precondition checking | No CNA preflight | CNA preflight + BOF defensive guard | Meets UX contract and fail-closed policy |
 
-**Key insight:** this phase wins by removing ambiguity in existing interfaces, not by adding new execution mechanics.
+**Key insight:** this phase is interface determinism work, not execution-capability expansion.
 </dont_hand_roll>
 
 <common_pitfalls>
 ## Common Pitfalls
 
-### Pitfall 1: Callback default with implicit CFG dependency
-**What goes wrong:** Unsafe/ambiguous defaults at session start.
-**How to avoid:** Non-callback default plus hard preflight block for callback when CFG-disable is off.
+### Pitfall 1: Callback remains default
+- **Failure:** unsafe-by-default operator start state.
+- **Prevention:** make direct RIP default, keep callback explicit opt-in.
 
-### Pitfall 2: Alias drift in method mapping
-**What goes wrong:** Same UI selection maps differently depending on alias path.
-**How to avoid:** One shared resolver and shared pack helper.
+### Pitfall 2: Mapping drift between aliases
+- **Failure:** same selected option yields different packed integer values.
+- **Prevention:** unify resolver + packing path.
 
-### Pitfall 3: Pack/parse contract drift over time
-**What goes wrong:** CNA field order diverges from BOF parser interpretation.
-**How to avoid:** Explicit mapping table in README and comment-level contract mirror near `go()` parser block.
+### Pitfall 3: Pack/parse drift over time
+- **Failure:** CNA order/type changes without parser alignment.
+- **Prevention:** comment-level + README mapping table in lockstep.
 </common_pitfalls>
 
 <code_examples>
 ## Code Examples
 
-### Current parser order anchor
+### Parser-order anchor (`Src/Bof.c`)
 ```c
-// Src/Bof.c
 BlockDllPolicy  = BeaconDataInt(&parser);
 DisableCfg      = BeaconDataInt(&parser);
 UseRWX          = BeaconDataInt(&parser);
 MemExec         = BeaconDataInt(&parser);
 ```
 
-### Current pack format anchor
+### Packing-order anchor (`BOF_spawn.cna`)
 ```sleep
-# BOF_spawn.cna
 $args = bof_pack($1, "ZZZZiiiib",
     $process_spawn, $parent_process, $working_dir, $cmd_line,
     $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec,
     $shellcode);
 ```
 
-### Required preflight gate behavior
+### Required gate behavior
 ```sleep
 if ($exec iswm "Hijack RIP Callback" && bool_to_int($cfg_disable) == 0) {
     berror($bid, "callback blocked: enable CFG-disable, then retry");
@@ -147,23 +140,23 @@ if ($exec iswm "Hijack RIP Callback" && bool_to_int($cfg_disable) == 0) {
 <open_questions>
 ## Open Questions
 
-1. **Debug toggle naming in CNA**
-   - Known: debug must be explicit and on-demand.
-   - Unknown: final command/variable naming convention.
-   - Recommendation: phase keeps this as a simple session variable to avoid scope creep.
+1. **Debug toggle surface in CNA**
+   - Known: must be explicit/on-demand.
+   - Unknown: final operator command/variable name.
+   - Plan handling: keep as local session toggle in this phase.
 
-2. **Contract-regression check placement**
-   - Known: SAFE-03 requires deterministic mapping + documentation.
-   - Unknown: whether automated drift check lands in Phase 1 or Phase 3.
-   - Recommendation: document deterministic mapping now; automation lands in Phase 3 (`TEST-02`).
+2. **Automated mapping regression placement**
+   - Known: SAFE-03 requires deterministic documented mapping.
+   - Unknown: whether automated drift checks land now or in test phase.
+   - Plan handling: manual/documented contract in Phase 1; automated drift checks in later testing phase.
 </open_questions>
 
 <sources>
 ## Sources
 
 ### Primary (HIGH confidence)
-- `BOF_spawn.cna` (defaults, dialog, mapping, packing)
-- `Src/Bof.c` (parser order, execution mode handling)
+- `BOF_spawn.cna`
+- `Src/Bof.c`
 - `.planning/phases/01-safety-defaults-contract-guardrails/01-CONTEXT.md`
 - `.planning/ROADMAP.md`
 - `.planning/REQUIREMENTS.md`
@@ -173,14 +166,11 @@ if ($exec iswm "Hijack RIP Callback" && bool_to_int($cfg_disable) == 0) {
 <metadata>
 ## Metadata
 
-**Research scope:**
-- Safety defaults and operator-facing guardrails
-- Callback/CFG precondition behavior
-- Deterministic packing/parsing mapping
+**Research scope:** strict-safe defaults, callback/CFG gating, deterministic mapping, operator feedback style.
 
 **Confidence breakdown:**
-- Standard stack: HIGH
-- Architecture patterns: HIGH
+- Stack: HIGH
+- Patterns: HIGH
 - Pitfalls: HIGH
 - Code examples: HIGH
 
@@ -191,5 +181,5 @@ if ($exec iswm "Hijack RIP Callback" && bool_to_int($cfg_disable) == 0) {
 ---
 
 *Phase: 01-safety-defaults-contract-guardrails*
-*Research refreshed: 2026-02-25*
+*Research refreshed: 2026-02-25T19:34:49Z*
 *Ready for planning: yes*
