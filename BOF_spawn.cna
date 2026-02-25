@@ -57,13 +57,14 @@ sub ApplyConfig {
     $use_rwx = $3['use_rwx'];
     $exec = $3['execmem'];
 
+    println("Profile:             strict-safe");
     println("Process name:        $process_spawn");
     println("Parent Process:      $parent_process");
     println("Working directory:   $working_dir");
     println("Command line:        $cmd_line");
     println("Block DLL policy:    $block_dll");
     println("Disable CFG:         $cfg_disable");
-    println("Use RWX:             $use_rwx");
+    println("Use RWX:             $use_rwx (manual opt-in)");
     println("Execution method:    $exec");
     println("=" x 60);
     println("[+] Configuration applied successfully\n");
@@ -93,15 +94,15 @@ sub ProcessConfig {
         &ApplyConfig);
 
     dialog_description($dialog, 
-        "Configure process spawning and injection parameters:\n\n" .
+        "Configure strict-safe process spawning and injection parameters:\n\n" .
         "Process Name:        Executable path to spawn (e.g., rundll32.exe)\n" .
         "Working Directory:   Current directory for spawned process\n" .
         "PPID Process:        Parent process name for PPID spoofing (empty = disabled)\n" .
         "CMD Line:            Command line arguments for spawned process\n" .
         "Block DLL Policy:    Restrict to Microsoft-signed DLLs only\n" .
-        "Disable CFG:         Disable Control Flow Guard (required for callback method)\n" .
-        "Use RWX:             Allocate memory as RWX (less stealthy but simpler)\n" .
-        "Execute Method:      Technique for shellcode execution"
+        "Disable CFG:         Required only for callback method\n" .
+        "Use RWX:             Manual opt-in (default remains RW->RX)\n" .
+        "Execute Method:      Default is Hijack RIP Direct (callback is opt-in)"
     );
     
     drow_text($dialog, "process_spawn", "Process Name:");
