@@ -45,6 +45,27 @@ typedef enum {
 } EXECUTION;
 
 /**
+ * @brief Validates execution preconditions before thread-context modification.
+ */
+__attribute__((always_inline)) NTSTATUS ValidateExecutionPreconditions(
+	_In_	EXECUTION	Execute,
+	_In_	BOOL		DisableCfg
+)
+{
+	if (Execute < HIJACK_RIP_DIRECT || Execute > HIJACK_RIP_CALLBACK_FUNCTION) {
+		BeaconPrintf(CALLBACK_ERROR, "[!] invalid execution method (%d) | next step: select a supported execution method and retry", Execute);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (Execute == HIJACK_RIP_CALLBACK_FUNCTION && !DisableCfg) {
+		BeaconPrintf(CALLBACK_ERROR, "[!] callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	return STATUS_SUCCESS;
+}
+
+/**
  * @brief Normalizes process input to executable basename for exact matching.
  */
 __attribute__((always_inline)) LPCWSTR NormalizeExecutableBasenameW(
@@ -395,9 +416,8 @@ NTSTATUS	SpawnAndRun(
 		------------------- */
 	ULONG oldProtect = 0;
 
-	if (Execute == HIJACK_RIP_CALLBACK_FUNCTION && !DisableCfg) {
-		BeaconPrintf(CALLBACK_ERROR, "[!] callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
-		Status = STATUS_INVALID_PARAMETER;
+	Status = ValidateExecutionPreconditions(Execute, DisableCfg);
+	if (NT_ERROR(Status)) {
 		goto cleanup;
 	}
 
@@ -636,8 +656,8 @@ void go(
     UseRWX          = BeaconDataInt(&parser);
     MemExec         = BeaconDataInt(&parser);
 
-	if (MemExec < HIJACK_RIP_DIRECT || MemExec > HIJACK_RIP_CALLBACK_FUNCTION) {
-		BeaconPrintf(CALLBACK_ERROR, "[!] invalid execution method (%d) | next step: select a supported execution method and retry", MemExec);
+	NTSTATUS Status = ValidateExecutionPreconditions((EXECUTION)MemExec, DisableCfg);
+	if (NT_ERROR(Status)) {
 		return;
 	}
 
@@ -663,7 +683,7 @@ void go(
 		return;
 	}
 
-    NTSTATUS Status = SpawnAndRun(
+    Status = SpawnAndRun(
 		lpwProcessName,
 		lpwParentProcessName,
 		lpwWorkingDir,
