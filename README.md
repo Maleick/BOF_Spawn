@@ -229,6 +229,40 @@ make
 
 Output: `Bin/bof.o`
 
+## Build Verification (TEST-01)
+
+Run the canonical build check script before runtime testing:
+
+```bash
+bash scripts/check_bof_build.sh --local --container --strict
+```
+
+Mode-specific checks:
+
+```bash
+# Local toolchain only
+bash scripts/check_bof_build.sh --local --strict
+
+# Containerized toolchain only
+bash scripts/check_bof_build.sh --container --strict
+```
+
+What this validates:
+- Required command/tooling preflight for the selected mode(s).
+- `Bin/bof.o` is generated and non-empty after each build path.
+- Strict mode freshness checks ensure artifact timestamps advance per build.
+
+Expected success output:
+```text
+[PASS] local build produced Bin/bof.o (... bytes, mtime ...)
+[PASS] container build produced Bin/bof.o (... bytes, mtime ...)
+```
+
+Expected failure style:
+```text
+[FAIL] <one-line cause> | next step: <fix action>
+```
+
 ## Limitations
 
 - **CET (Control-flow Enforcement Technology)**: Synthetic stack frames may trigger violations in CET-enabled processes
