@@ -293,7 +293,7 @@ NTSTATUS	SpawnAndRun(
 		NbrOfAttributes++;
 			
 		if (!GetProcessIdWithNameW(lpwParentProcessName, &dwProcessParentId)) {
-			BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find parent process: %ws", lpwParentProcessName);
+			BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find parent process: %ws | next step: provide an exact executable name (e.g., explorer.exe) and retry", lpwParentProcessName);
 			Status = STATUS_INVALID_PARAMETER_2;
 			goto cleanup;
 		}
