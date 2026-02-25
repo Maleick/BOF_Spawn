@@ -25,6 +25,12 @@
 VX_TABLE				VxTable;
 SYNTHETIC_STACK_FRAME	SyntheticStackframe;
 
+DECLSPEC_IMPORT BOOLEAN NTAPI NTDLL$RtlFreeHeap(PVOID HeapHandle, ULONG Flags, PVOID BaseAddress);
+DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$RtlDestroyProcessParameters(PRTL_USER_PROCESS_PARAMETERS ProcessParameters);
+
+#define RtlFreeHeap					NTDLL$RtlFreeHeap
+#define RtlDestroyProcessParameters	NTDLL$RtlDestroyProcessParameters
+
 /**
  * @enum EXECUTION
  * @brief Shellcode execution methods supported by this BOF
@@ -491,6 +497,31 @@ NTSTATUS	SpawnAndRun(
 	}
 
 cleanup:
+	if (hThread) {
+		DRAUGR_SYSCALL(NtClose, hThread);
+		hThread = NULL;
+	}
+
+	if (hProcess) {
+		DRAUGR_SYSCALL(NtClose, hProcess);
+		hProcess = NULL;
+	}
+
+	if (hParentProcess) {
+		DRAUGR_SYSCALL(NtClose, hParentProcess);
+		hParentProcess = NULL;
+	}
+
+	if (AttributeList) {
+		RtlFreeHeap(RtlProcessHeap(), 0, AttributeList);
+		AttributeList = NULL;
+	}
+
+	if (ProcessParameters) {
+		RtlDestroyProcessParameters(ProcessParameters);
+		ProcessParameters = NULL;
+	}
+
 	return Status;
 }
 
