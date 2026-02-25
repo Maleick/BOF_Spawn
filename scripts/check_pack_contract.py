@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -108,8 +109,8 @@ def extract_bof_sequence(go_text: str, go_start_line: int) -> List[ParseField]:
     return fields
 
 
-def compare_schema(cna_schema: str, bof_fields: List[ParseField]) -> List[str]:
-    mismatches: List[str] = []
+def compare_schema(cna_schema: str, bof_fields: List[ParseField]) -> List[dict]:
+    mismatches: List[dict] = []
     bof_schema = "".join(field.kind for field in bof_fields)
     max_len = max(len(cna_schema), len(bof_schema))
 
@@ -123,7 +124,13 @@ def compare_schema(cna_schema: str, bof_fields: List[ParseField]) -> List[str]:
         field = bof_fields[idx].field if idx < len(bof_fields) else "<missing>"
         line = bof_fields[idx].line if idx < len(bof_fields) else -1
         mismatches.append(
-            f"position {pos}: expected {expected or '<none>'}, got {actual or '<none>'} (field={field}, line={line})"
+            {
+                "position": pos,
+                "expected": expected,
+                "actual": actual,
+                "field": field,
+                "line": line,
+            }
         )
 
     return mismatches
@@ -133,6 +140,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check CNA/BOF packing contract.")
     parser.add_argument("--cna", required=True, help="Path to BOF_spawn.cna")
     parser.add_argument("--bof", required=True, help="Path to Src/Bof.c")
+    parser.add_argument("--json", action="store_true", dest="json_output", help="Emit machine-readable JSON output")
     args = parser.parse_args()
 
     cna_path = Path(args.cna)
@@ -146,16 +154,58 @@ def main() -> int:
         bof_fields = extract_bof_sequence(go_text, go_line)
         mismatches = compare_schema(cna_schema, bof_fields)
     except RuntimeError as exc:
-        print(f"[FAIL] {exc}", file=sys.stderr)
+        if args.json_output:
+            print(json.dumps({"status": "failed", "error": str(exc)}, indent=2))
+        else:
+            print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
 
     bof_schema = "".join(field.kind for field in bof_fields)
+    result = {
+        "status": "passed" if not mismatches else "failed",
+        "cna": {
+            "file": str(cna_path),
+            "schema": cna_schema,
+            "field_count": len(cna_schema),
+        },
+        "bof": {
+            "file": str(bof_path),
+            "schema": bof_schema,
+            "field_count": len(bof_fields),
+            "fields": [
+                {
+                    "position": field.position,
+                    "field": field.field,
+                    "type": field.kind,
+                    "source": field.source,
+                    "line": field.line,
+                }
+                for field in bof_fields
+            ],
+        },
+        "mismatches": mismatches,
+    }
+
+    if args.json_output:
+        print(json.dumps(result, indent=2))
+        return 0 if not mismatches else 1
+
     if mismatches:
         print("[FAIL] CNA/BOF contract drift detected")
         print(f"[FAIL] CNA schema: {cna_schema}")
         print(f"[FAIL] BOF schema: {bof_schema}")
         for mismatch in mismatches:
-            print(f"[FAIL] {mismatch}")
+            expected = mismatch["expected"] if mismatch["expected"] is not None else "<none>"
+            actual = mismatch["actual"] if mismatch["actual"] is not None else "<none>"
+            print(
+                "[FAIL] position {position}: expected {expected}, got {actual} (field={field}, line={line})".format(
+                    position=mismatch["position"],
+                    expected=expected,
+                    actual=actual,
+                    field=mismatch["field"],
+                    line=mismatch["line"],
+                )
+            )
         return 1
 
     print("[PASS] CNA packing schema matches BOF parser extraction order/types")
