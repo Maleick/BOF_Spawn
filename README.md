@@ -288,6 +288,21 @@ Expected failure style:
 [FAIL] <one-line cause> | next step: <fix action>
 ```
 
+## Execution Validation (TEST-03)
+
+Run method validation in deterministic order (Direct baseline first, then gadget paths, callback last):
+
+1. Set `Execution Method` to `Hijack RIP Direct`
+2. Run `spawn_beacon <listener>` (or `spawn_shellcode <file>`)
+3. Repeat for `Hijack RIP Jmp Rax`, `Hijack RIP Jmp Rbx`, and `Hijack RIP Callback`
+
+Full matrix (prereqs, expected signals, and triage flow):
+- [`docs/execution-validation-matrix.md`](docs/execution-validation-matrix.md)
+
+Validation signal contract:
+- **success signal:** BOF run completes and method-specific path executes without stage errors
+- **failure signal:** one or more precondition/stage errors (for example callback gate, gadget lookup, context set, resume stage)
+
 ## Limitations
 
 - **CET (Control-flow Enforcement Technology)**: Synthetic stack frames may trigger violations in CET-enabled processes
