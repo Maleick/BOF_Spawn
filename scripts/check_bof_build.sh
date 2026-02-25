@@ -14,14 +14,16 @@ CONTAINER_COPY_LOG="${TMPDIR:-/tmp}/check_bof_build_container_copy.$$"
 
 RUN_LOCAL=0
 RUN_CONTAINER=0
+STRICT_MODE=0
 
 print_usage() {
   cat <<'EOF'
-Usage: bash scripts/check_bof_build.sh [--local] [--container]
+Usage: bash scripts/check_bof_build.sh [--local] [--container] [--strict]
 
 Checks:
   --local      Run local build check only.
   --container  Run Dockerized build check only.
+  --strict     Enforce artifact freshness checks using file mtime.
 
 If no mode is provided, both local and container checks run.
 EOF
@@ -36,8 +38,14 @@ pass() {
 }
 
 fail() {
-  printf '[FAIL] %s\n' "$1" >&2
+  printf '[FAIL] %s | next step: %s\n' "$1" "$2" >&2
   exit 1
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    fail "missing required command '$1'" "install '$1' and retry the requested build mode"
+  fi
 }
 
 cleanup_artifact() {
@@ -45,39 +53,91 @@ cleanup_artifact() {
   find "${REPO_ROOT}/Bin/temp" -maxdepth 1 -type f ! -name '.gitkeep' -delete
 }
 
+artifact_size() {
+  if stat -f "%z" "$1" >/dev/null 2>&1; then
+    stat -f "%z" "$1"
+  else
+    stat -c "%s" "$1"
+  fi
+}
+
+artifact_mtime() {
+  if stat -f "%m" "$1" >/dev/null 2>&1; then
+    stat -f "%m" "$1"
+  else
+    stat -c "%Y" "$1"
+  fi
+}
+
 check_artifact() {
   if [[ ! -f "${ARTIFACT}" ]]; then
-    fail "Bin/bof.o missing after ${1} build"
+    fail "Bin/bof.o missing after ${1} build" "inspect ${1} build logs and resolve compile/link failures"
   fi
 
   local size
-  size="$(wc -c <"${ARTIFACT}")"
+  size="$(artifact_size "${ARTIFACT}")"
   if [[ "${size}" -le 0 ]]; then
-    fail "Bin/bof.o is empty after ${1} build"
+    fail "Bin/bof.o is empty after ${1} build" "inspect ${1} build logs and ensure object generation completed"
   fi
 
-  pass "${1} build produced Bin/bof.o (${size} bytes)"
+  local mtime
+  mtime="$(artifact_mtime "${ARTIFACT}")"
+  if [[ "${STRICT_MODE}" -eq 1 ]]; then
+    if [[ "${mtime}" -lt "${2}" ]]; then
+      fail "Bin/bof.o mtime (${mtime}) predates ${1} build start (${2})" "remove stale artifacts and rerun in strict mode"
+    fi
+
+    if [[ "${3}" -gt 0 && "${mtime}" -le "${3}" ]]; then
+      fail "Bin/bof.o mtime (${mtime}) did not advance after ${1} build" "force a clean rebuild and confirm timestamps update"
+    fi
+  fi
+
+  pass "${1} build produced Bin/bof.o (${size} bytes, mtime ${mtime})"
 }
 
 run_local() {
   info "running local build verification"
+  require_command make
+  require_command nasm
+  require_command x86_64-w64-mingw32-gcc
+
+  local prior_mtime=0
+  if [[ -f "${ARTIFACT}" ]]; then
+    prior_mtime="$(artifact_mtime "${ARTIFACT}")"
+  fi
+
+  local build_started
+  build_started="$(date +%s)"
   cleanup_artifact
 
   if ! (cd "${REPO_ROOT}" && make spawn_bof >"${LOCAL_LOG}" 2>&1); then
     tail -n 20 "${LOCAL_LOG}" >&2 || true
-    fail "local build failed"
+    fail "local build failed" "run 'make spawn_bof' manually to inspect compiler/linker output"
   fi
 
-  check_artifact "local"
+  check_artifact "local" "${build_started}" "${prior_mtime}"
 }
 
 run_container() {
   info "running container build verification"
+  require_command docker
+
+  if ! docker info >/dev/null 2>&1; then
+    fail "docker daemon unavailable" "start Docker and verify 'docker info' succeeds"
+  fi
+
+  local prior_mtime=0
+  if [[ -f "${ARTIFACT}" ]]; then
+    prior_mtime="$(artifact_mtime "${ARTIFACT}")"
+  fi
+
+  local build_started
+  build_started="$(date +%s)"
   cleanup_artifact
 
   if ! (cd "${REPO_ROOT}" && docker build --platform linux/amd64 -t "${DOCKER_IMAGE_TAG}" -f Dockerfile . >"${CONTAINER_BASE_BUILD_LOG}" 2>&1); then
     tail -n 20 "${CONTAINER_BASE_BUILD_LOG}" >&2 || true
-    fail "docker build failed"
+    fail "docker build failed" "fix Dockerfile/toolchain image build issues and retry"
   fi
 
   if ! (
@@ -89,7 +149,7 @@ RUN make spawn_bof
 EOF
   ); then
     tail -n 20 "${CONTAINER_ARTIFACT_BUILD_LOG}" >&2 || true
-    fail "container artifact build failed"
+    fail "container artifact build failed" "resolve containerized make errors and retry"
   fi
 
   local cid
@@ -97,11 +157,11 @@ EOF
   if ! docker cp "${cid}:/work/Bin/bof.o" "${ARTIFACT}" >"${CONTAINER_COPY_LOG}" 2>&1; then
     tail -n 20 "${CONTAINER_COPY_LOG}" >&2 || true
     docker rm "${cid}" >/dev/null 2>&1 || true
-    fail "failed to copy Bin/bof.o from container artifact image"
+    fail "failed to copy Bin/bof.o from container artifact image" "inspect container image output and verify Bin/bof.o exists"
   fi
   docker rm "${cid}" >/dev/null 2>&1 || true
 
-  check_artifact "container"
+  check_artifact "container" "${build_started}" "${prior_mtime}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -114,12 +174,16 @@ while [[ $# -gt 0 ]]; do
       RUN_CONTAINER=1
       shift
       ;;
+    --strict)
+      STRICT_MODE=1
+      shift
+      ;;
     -h|--help)
       print_usage
       exit 0
       ;;
     *)
-      fail "unknown argument: $1"
+      fail "unknown argument: $1" "run with --help to see supported options"
       ;;
   esac
 done
