@@ -4,11 +4,11 @@
 
 ## Tech Debt
 
-**Resource cleanup in orchestration path (`Src/Bof.c`):**
-- Issue: `SpawnAndRun()` has many early returns after allocations/handle opens.
-- Why: fail-fast control flow prioritizes immediate error propagation.
-- Impact: possible handle or heap leaks in error paths (`hParentProcess`, `hProcess`, `hThread`, `AttributeList`, process parameters).
-- Fix approach: introduce centralized cleanup label/function and close/free resources before every return.
+**Resource cleanup remains sensitive but now centralized (`Src/Bof.c`):**
+- Current state: `SpawnAndRun()` uses centralized `cleanup` handling for owned resources.
+- Evidence anchors: `NtClose` for process/thread handles and `RtlDestroyProcessParameters` / `RtlFreeHeap` for process params and attribute list.
+- Residual risk: future edits that bypass `cleanup` could reintroduce leaks.
+- Maintenance rule: keep all failure exits routed through shared cleanup path.
 
 **Header coupling and monolithic declarations (`Src/Native.h`):**
 - Issue: large native API/type surface in a single header (~10k lines) increases cognitive load and compile coupling.
@@ -18,12 +18,11 @@
 
 ## Known Bugs / High-Risk Behaviors
 
-**Process name matching can produce false positives (`Src/Bof.c`):**
-- Symptoms: wrong parent PID may be selected for PPID spoofing.
-- Trigger: `GetProcessIdWithNameW` uses substring search (`StrStrW`) instead of exact match.
-- Workaround: use unique, exact process names operationally.
-- Root cause: permissive matching logic.
-- Fix approach: replace with case-insensitive equality check against full executable name.
+**PPID matching hardening is implemented (`Src/Bof.c`):**
+- Current state: `GetProcessIdWithNameW` enforces exact case-insensitive executable-name matching.
+- Evidence anchors: basename normalization plus `lstrcmpiW` equality check.
+- Residual risk: operators still need the correct executable basename when configuring PPID spoofing.
+- Maintenance rule: preserve exact-match behavior (no substring or fuzzy fallback).
 
 **Gadget lookup is naive linear scan (`Src/Bof.c`, `Src/Draugr.c`):**
 - Symptoms: unpredictable behavior across OS/library versions; potential misses or unintended gadgets.

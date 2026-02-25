@@ -15,7 +15,7 @@
   - Used via indirect syscall resolution in `Src/Draugr.c` and `Src/Macros.h`
 - `kernel32` APIs for module/procedure lookup and process enumeration helpers
   - Imports defined in `Src/Bofdefs.h`
-- `shlwapi` `StrStrW` for process-name matching helper in `Src/Bof.c`
+- `kernel32` `lstrcmpiW` for exact case-insensitive process-name equality in `GetProcessIdWithNameW` (`Src/Bof.c`)
 
 ## Data Storage
 

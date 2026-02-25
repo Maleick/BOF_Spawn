@@ -11,12 +11,13 @@
 - Control/config layer separated into Aggressor script (`BOF_spawn.cna`)
 - Execution core composed of C logic plus assembly trampoline (`Src/Stub.s`)
 - Evasion-focused runtime abstractions (indirect syscalls + synthetic stack)
+- Strict-safe operator posture is enforced through script defaults plus runtime precondition gates
 
 ## Layers
 
 **Operator Interface Layer:**
 - Purpose: collect operator config, validate command usage, pack arguments
-- Contains: command aliases, dialog/UI setup, payload loading
+- Contains: command aliases, dialog/UI setup, payload loading, and preflight execution validation
 - Files: `BOF_spawn.cna`
 - Depends on: Beacon/Aggressor runtime
 - Used by: operator in Cobalt Strike client
@@ -106,12 +107,14 @@
 - Fail fast when imports/symbols cannot be resolved
 - Fail fast on syscall failure (`NT_ERROR(Status)`)
 - Minimal recovery/retry behavior
+- Fail-closed execution checks surface callback gate diagnostics (`callback blocked (cfg-disable is off)`)
 
 ## Cross-Cutting Concerns
 
 **Operational Stealth/Evasion:**
 - Indirect syscalls and stack spoofing are integrated into core call path
 - Mitigation policy toggles (BlockDLL/CFG) handled during process creation
+- Default documentation and runtime behavior align on strict-safe posture for method selection and memory permissions
 
 **Architecture Constraints:**
 - x64-only assumptions present in assembly and context register logic

@@ -54,8 +54,8 @@
 - Error visibility through `BeaconPrintf(CALLBACK_ERROR, ...)` and `berror(...)`
 
 **Observations:**
-- Happy path focuses on completion over cleanup normalization
-- Multiple early returns in `SpawnAndRun()` can skip cleanup for allocated resources/handles
+- Fail-fast logic is paired with centralized cleanup in `SpawnAndRun()` to avoid orphaned handle/heap ownership on error paths
+- Execution preconditions are enforced before context tampering, including callback gate messaging (`callback blocked (cfg-disable is off)`)
 
 ## Logging
 
