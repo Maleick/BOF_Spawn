@@ -303,6 +303,20 @@ Validation signal contract:
 - **success signal:** BOF run completes and method-specific path executes without stage errors
 - **failure signal:** one or more precondition/stage errors (for example callback gate, gadget lookup, context set, resume stage)
 
+## Troubleshooting (DOCS-02)
+
+Quick first-line NTSTATUS and stage triage:
+
+- `invalid execution method` -> select a supported execution method, then retry
+- `callback blocked (cfg-disable is off)` -> enable CFG-disable, then retry callback mode
+- `NtCreateUserProcess` / `NtGetContextThread` / `NtSetContextThread` / `NtResumeProcess` failures -> capture exact stage and rerun Direct baseline method first
+
+Full troubleshooting table and fail-closed unknown-code flow:
+- [`docs/ntstatus-troubleshooting.md`](docs/ntstatus-troubleshooting.md)
+
+Output style reminder:
+- Treat each failure as `cause | next step` and keep triage notes concise.
+
 ## Limitations
 
 - **CET (Control-flow Enforcement Technology)**: Synthetic stack frames may trigger violations in CET-enabled processes
