@@ -130,6 +130,16 @@ sub bool_to_int {
 }
 
 # ================================================================
+# HELPER: PRINT RUNTIME POLICY SNAPSHOT
+# ================================================================
+sub print_policy_snapshot {
+    println("Block DLL:        $1");
+    println("Disable CFG:      $2");
+    println("Use RWX:          $3");
+    println("Execution:        $4");
+}
+
+# ================================================================
 # HELPER: GET BOF PATH
 # ================================================================
 sub get_bof_path {
@@ -193,10 +203,7 @@ alias spawn_beacon {
         $temp_exec = 3;
     }
 
-    println("Block DLL:        $temp_block_dll");
-    println("Disable CFG:      $temp_cfg_disable");
-    println("Use RWX:          $temp_use_rwx");
-    println("Execution:        $temp_exec");
+    print_policy_snapshot($temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec);
 
     # Load BOF
     $bof_path = get_bof_path();
@@ -268,10 +275,7 @@ alias spawn_shellcode {
         $temp_exec = 3;
     }
 
-    println("Block DLL:        $temp_block_dll");
-    println("Disable CFG:      $temp_cfg_disable");
-    println("Use RWX:          $temp_use_rwx");
-    println("Execution:        $temp_exec");
+    print_policy_snapshot($temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec);
 
     # Load BOF
     $bof_path = get_bof_path();
