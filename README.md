@@ -102,6 +102,31 @@ Execution method mapping (CNA string -> `MemExec`):
 
 Unknown execution method values are blocked before execution dispatch.
 
+## Contract-Regression Check (TEST-02)
+
+Run the structured checker to verify CNA packing order/types still match BOF parser extraction:
+
+```bash
+bash scripts/check_pack_contract.sh
+```
+
+Machine-readable mode for CI/automation:
+
+```bash
+bash scripts/check_pack_contract.sh --json
+```
+
+Expected success output:
+```text
+[PASS] CNA packing schema matches BOF parser extraction order/types
+[PASS] schema: ZZZZiiiib (9 fields)
+```
+
+Mismatch triage flow:
+1. Check reported `position` in checker output.
+2. Compare `bof_pack(..., "ZZZZiiiib", ...)` in `BOF_spawn.cna` with corresponding `BeaconDataExtract`/`BeaconDataInt` call order in `Src/Bof.c::go()`.
+3. Update CNA and BOF parsing in lockstep, then re-run `bash scripts/check_pack_contract.sh`.
+
 ## Shellcode Execution Methods
 
 ### 1. Direct RIP Hijacking
