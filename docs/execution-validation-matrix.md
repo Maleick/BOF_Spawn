@@ -18,3 +18,19 @@ Use this as the canonical operator runbook for method-level validation before tr
 - Record exact error text and stage when a failure signal appears.
 - Use the troubleshooting guide after method-level validation:
   - `docs/ntstatus-troubleshooting.md`
+
+## Deterministic Validation Order
+
+Run validation in this order:
+1. Hijack RIP Direct first (baseline control)
+2. Hijack RIP Jmp Rax second
+3. Hijack RIP Jmp Rbx third
+4. Hijack RIP Callback last
+
+## Isolation Guidance
+
+- If Direct fails first, stop and isolate baseline issues before continuing.
+- If Direct passes but Jmp Rax fails, isolate gadget or register-path issues specific to Jmp Rax.
+- If Jmp Rax passes but Jmp Rbx fails, isolate gadget discovery differences for Jmp Rbx.
+- If callback fails while Direct/Jmp paths pass, isolate callback preconditions (CFG-disable) and callback symbol resolution.
+- Always capture method, command, and exact failure string before escalating triage.
