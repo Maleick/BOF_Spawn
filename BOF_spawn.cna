@@ -151,6 +151,20 @@ sub debug_log {
     }
 }
 
+sub resolve_exec_method {
+    if ($1 iswm "Hijack RIP Direct") {
+        return 0;
+    } else if ($1 iswm "Hijack RIP Jmp Rax") {
+        return 1;
+    } else if ($1 iswm "Hijack RIP Jmp Rbx") {
+        return 2;
+    } else if ($1 iswm "Hijack RIP Callback") {
+        return 3;
+    }
+
+    return -1;
+}
+
 # ================================================================
 # HELPER: PREFLIGHT EXECUTION GUARDRAILS
 # ================================================================
@@ -229,16 +243,11 @@ alias spawn_beacon {
         return;
     }
 
-    # Map execution method string to integer
-    $temp_exec = 0;
-    if ($exec iswm "Hijack RIP Direct") {
-        $temp_exec = 0;
-    } else if ($exec iswm "Hijack RIP Jmp Rax") {
-        $temp_exec = 1;
-    } else if ($exec iswm "Hijack RIP Jmp Rbx") {
-        $temp_exec = 2;
-    } else if ($exec iswm "Hijack RIP Callback") {
-        $temp_exec = 3;
+    # Resolve execution method string to integer (no fallback)
+    $temp_exec = resolve_exec_method($exec);
+    if ($temp_exec == -1) {
+        berror($1, "unknown execution method '$exec' | next step: choose a supported execution method and retry");
+        return;
     }
 
     print_policy_snapshot($temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec);
@@ -307,16 +316,11 @@ alias spawn_shellcode {
         return;
     }
 
-    # Map execution method string to integer
-    $temp_exec = 0;
-    if ($exec iswm "Hijack RIP Direct") {
-        $temp_exec = 0;
-    } else if ($exec iswm "Hijack RIP Jmp Rax") {
-        $temp_exec = 1;
-    } else if ($exec iswm "Hijack RIP Jmp Rbx") {
-        $temp_exec = 2;
-    } else if ($exec iswm "Hijack RIP Callback") {
-        $temp_exec = 3;
+    # Resolve execution method string to integer (no fallback)
+    $temp_exec = resolve_exec_method($exec);
+    if ($temp_exec == -1) {
+        berror($1, "unknown execution method '$exec' | next step: choose a supported execution method and retry");
+        return;
     }
 
     print_policy_snapshot($temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec);
