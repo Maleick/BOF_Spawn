@@ -310,6 +310,18 @@ Expected failure style:
 [FAIL] <one-line cause> | next step: <fix action>
 ```
 
+## Recommended Operator Flow
+
+Use this sequence to keep method selection, validation, and troubleshooting coherent:
+
+1. Start with **Safe Defaults (DOCS-01)** and choose method posture from **Recommended Execution Method Matrix (DOCS-01)**.
+2. Run deterministic checks in **Execution Validation (TEST-03)**:
+   - [`docs/execution-validation-matrix.md`](docs/execution-validation-matrix.md)
+3. If any failure signal appears, go directly to **Troubleshooting (DOCS-02)**:
+   - [`docs/ntstatus-troubleshooting.md`](docs/ntstatus-troubleshooting.md)
+
+This keeps operator flow as: `method choice -> validation -> triage`.
+
 ## Execution Validation (TEST-03)
 
 Run method validation in deterministic order (Direct baseline first, then gadget paths, callback last):
