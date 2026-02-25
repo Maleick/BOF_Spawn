@@ -27,9 +27,11 @@ SYNTHETIC_STACK_FRAME	SyntheticStackframe;
 
 DECLSPEC_IMPORT BOOLEAN NTAPI NTDLL$RtlFreeHeap(PVOID HeapHandle, ULONG Flags, PVOID BaseAddress);
 DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$RtlDestroyProcessParameters(PRTL_USER_PROCESS_PARAMETERS ProcessParameters);
+DECLSPEC_IMPORT int WINAPI KERNEL32$lstrcmpiW(LPCWSTR lpString1, LPCWSTR lpString2);
 
 #define RtlFreeHeap					NTDLL$RtlFreeHeap
 #define RtlDestroyProcessParameters	NTDLL$RtlDestroyProcessParameters
+#define lstrcmpiW					KERNEL32$lstrcmpiW
 
 /**
  * @enum EXECUTION
@@ -41,6 +43,31 @@ typedef enum {
 	HIJACK_RIP_JMP_RBX,          /**< RIP points to JMP RBX gadget, RBX holds shellcode address */
 	HIJACK_RIP_CALLBACK_FUNCTION /**< RIP points to callback function (EnumResourceTypesW) */
 } EXECUTION;
+
+/**
+ * @brief Normalizes process input to executable basename for exact matching.
+ */
+__attribute__((always_inline)) LPCWSTR NormalizeExecutableBasenameW(
+	_In_	LPCWSTR		lpcwProcessName
+)
+{
+	LPCWSTR lpcwBaseName = lpcwProcessName;
+	if (!lpcwProcessName) {
+		return NULL;
+	}
+
+	for (LPCWSTR pCursor = lpcwProcessName; *pCursor; pCursor++) {
+		if (*pCursor == L'\\' || *pCursor == L'/') {
+			lpcwBaseName = pCursor + 1;
+		}
+	}
+
+	if (!lpcwBaseName || !*lpcwBaseName) {
+		return NULL;
+	}
+
+	return lpcwBaseName;
+}
 
 
 /**
@@ -63,6 +90,15 @@ __attribute__((always_inline)) BOOL	GetProcessIdWithNameW(
 	_Inout_	PDWORD		pdwProcessId
 )
 {
+	if (!lpcwProcessName || !pdwProcessId) {
+		return FALSE;
+	}
+
+	LPCWSTR lpcwExpectedExe = NormalizeExecutableBasenameW(lpcwProcessName);
+	if (!lpcwExpectedExe) {
+		return FALSE;
+	}
+
 	HMODULE	hKernel32	= GetModuleHandleA("Kernel32.dll");
 	if(!hKernel32) {
 		return FALSE;
@@ -94,7 +130,7 @@ __attribute__((always_inline)) BOOL	GetProcessIdWithNameW(
 
 	do
 	{
-		if (StrStrW(lpcwProcessName, pe32.szExeFile)) {
+		if (lstrcmpiW(lpcwExpectedExe, pe32.szExeFile) == 0) {
 			DRAUGR_SYSCALL(NtClose, ProcessSnap);
 			*pdwProcessId = pe32.th32ProcessID;
 			return TRUE;
