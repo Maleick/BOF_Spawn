@@ -218,6 +218,7 @@ NTSTATUS	SpawnAndRun(
 	NTSTATUS Status = STATUS_SUCCESS;
 
 	DWORD	dwProcessParentId = 0;
+	/* cleanup ownership: owned by SpawnAndRun, released in cleanup */
 	HANDLE	hParentProcess = NULL;
 	HANDLE	hProcess = NULL;
 	HANDLE	hThread = NULL;
@@ -497,6 +498,7 @@ NTSTATUS	SpawnAndRun(
 	}
 
 cleanup:
+	/* owned by SpawnAndRun and released in cleanup */
 	if (hThread) {
 		DRAUGR_SYSCALL(NtClose, hThread);
 		hThread = NULL;
@@ -521,6 +523,7 @@ cleanup:
 		RtlDestroyProcessParameters(ProcessParameters);
 		ProcessParameters = NULL;
 	}
+	/* cleanup ownership boundaries end here: all owned resources released in cleanup */
 
 	return Status;
 }
