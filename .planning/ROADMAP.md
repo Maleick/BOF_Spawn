@@ -12,7 +12,7 @@ This roadmap hardens and operationalizes the existing BOF Spawn codebase by prio
 
 - [x] **Phase 1: Safety Defaults & Contract Guardrails** - Make runtime options safer and argument semantics explicit. (completed 2026-02-25)
 - [x] **Phase 2: Core Reliability Hardening** - Eliminate fragile failure-path behavior in injection orchestration. (completed 2026-02-25)
-- [ ] **Phase 3: Build & Contract Regression Coverage** - Add repeatable checks for artifact generation and CNA/BOF contract drift.
+- [x] **Phase 3: Build & Contract Regression Coverage** - Add repeatable checks for artifact generation and CNA/BOF contract drift. (completed 2026-02-25)
 - [ ] **Phase 4: Execution Validation & Troubleshooting** - Standardize method-level validation and failure triage.
 - [ ] **Phase 5: Documentation & Map Alignment** - Finalize operator docs and keep planning/codebase docs synchronized.
 
@@ -99,6 +99,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Safety Defaults & Contract Guardrails | 3/3 | Complete    | 2026-02-25 |
 | 2. Core Reliability Hardening | 3/3 | Complete    | 2026-02-25 |
-| 3. Build & Contract Regression Coverage | 1/2 | In Progress|  |
+| 3. Build & Contract Regression Coverage | 2/2 | Complete   | 2026-02-25 |
 | 4. Execution Validation & Troubleshooting | 0/2 | Not started | - |
 | 5. Documentation & Map Alignment | 0/2 | Not started | - |

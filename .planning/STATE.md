@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-02-25T21:24:42.120Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-02-25T21:27:00.651Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -50,6 +50,7 @@ Progress: [█████░░░░░] 50%
 
 *Updated after each plan completion*
 | Phase 03 P01 | 2min | 3 tasks | 2 files |
+| Phase 03 P02 | 2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -62,6 +63,8 @@ Recent decisions affecting current work:
 - Scope: Prioritize reliability/safety hardening before new feature expansion
 - [Phase 03]: Use linux/amd64 container build checks with docker cp artifact extraction — Avoid host bind-mount/file-sharing failures while preserving deterministic container validation
 - [Phase 03]: Require strict preflight and artifact freshness checks in build verifier — Fail fast on stale artifacts and missing toolchain prerequisites
+- [Phase 03]: Use parser-aware extraction comparison for CNA/BOF contract checks — Detect semantic order/type drift deterministically instead of pattern-only checks
+- [Phase 03]: Provide JSON output mode and shell wrapper for contract checker — Enable deterministic CI integration and simple maintainer invocation
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-**Last session:** 2026-02-25T21:24:42.119Z
-**Stopped at:** Completed 03-01-PLAN.md
-**Resume file:** .planning/phases/03-build-contract-regression-coverage/03-02-PLAN.md
+**Last session:** 2026-02-25T21:27:00.649Z
+**Stopped at:** Completed 03-02-PLAN.md
+**Resume file:** None
