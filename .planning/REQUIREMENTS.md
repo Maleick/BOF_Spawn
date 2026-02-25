@@ -13,9 +13,9 @@
 
 ### Safety Controls
 
-- [ ] **SAFE-01**: Default operator profile uses RW->RX memory transition rather than RWX allocation.
-- [ ] **SAFE-02**: Callback execution mode is explicitly gated by CFG-disable requirement with visible operator warning.
-- [ ] **SAFE-03**: CNA-to-BOF argument mapping remains deterministic and documented for all toggles and execution methods.
+- [x] **SAFE-01**: Default operator profile uses RW->RX memory transition rather than RWX allocation.
+- [x] **SAFE-02**: Callback execution mode is explicitly gated by CFG-disable requirement with visible operator warning.
+- [x] **SAFE-03**: CNA-to-BOF argument mapping remains deterministic and documented for all toggles and execution methods.
 
 ### Testing & Verification
 
@@ -50,9 +50,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
-| SAFE-03 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Complete |
+| SAFE-02 | Phase 1 | Complete |
+| SAFE-03 | Phase 1 | Complete |
 | RELI-01 | Phase 2 | Pending |
 | RELI-02 | Phase 2 | Pending |
 | RELI-03 | Phase 2 | Pending |
