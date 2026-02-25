@@ -7,7 +7,7 @@
 
 ### Reliability
 
-- [ ] **RELI-01**: BOF cleans up opened handles and allocated resources before returning from any failure path.
+- [x] **RELI-01**: BOF cleans up opened handles and allocated resources before returning from any failure path.
 - [ ] **RELI-02**: Parent process selection uses exact case-insensitive executable-name matching and fails closed when no exact match exists.
 - [ ] **RELI-03**: Execution-method preconditions are validated before thread-context modification and return actionable errors on invalid combinations.
 
@@ -53,7 +53,7 @@
 | SAFE-01 | Phase 1 | Complete |
 | SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Complete |
-| RELI-01 | Phase 2 | Pending |
+| RELI-01 | Phase 2 | Complete |
 | RELI-02 | Phase 2 | Pending |
 | RELI-03 | Phase 2 | Pending |
 | TEST-01 | Phase 3 | Pending |
