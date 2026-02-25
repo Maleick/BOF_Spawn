@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Captured Phase 5 context (discuss-first)
-last_updated: "2026-02-25T22:35:28.538Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-02-25T22:48:25.662Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -55,6 +55,7 @@ Progress: [████████░░] 83%
 | Phase 03 P02 | 2min | 3 tasks | 3 files |
 | Phase 04 P01 | 1min | 3 tasks | 2 files |
 | Phase 04 P02 | 1min | 3 tasks | 2 files |
+| Phase 05 P01 | 2min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Provide JSON output mode and shell wrapper for contract checker — Enable deterministic CI integration and simple maintainer invocation
 - [Phase 04]: Use Direct method as mandatory baseline before gadget and callback validation — Improves regression isolation by separating baseline failures from method-specific issues
 - [Phase 04]: Map dominant NTSTATUS and stage failures to one-line cause-to-next-step guidance — Keeps troubleshooting low-noise while preserving actionable remediation
+- [Phase 05]: Document strict-safe defaults and per-method trade-off matrix in README — Satisfy DOCS-01 with explicit operator contract and normalized method guidance
 
 ### Pending Todos
 
@@ -82,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-**Last session:** 2026-02-25T22:35:28.536Z
-**Stopped at:** Captured Phase 5 context (discuss-first)
-**Resume file:** .planning/phases/05-documentation-map-alignment/05-RESEARCH.md
+**Last session:** 2026-02-25T22:48:25.649Z
+**Stopped at:** Completed 05-01-PLAN.md
+**Resume file:** .planning/phases/05-documentation-map-alignment/05-02-PLAN.md
