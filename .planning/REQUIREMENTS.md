@@ -27,7 +27,7 @@
 
 - [x] **DOCS-01**: README documents recommended safe defaults and detection trade-offs for each execution method.
 - [x] **DOCS-02**: README includes troubleshooting guidance for common NTSTATUS failure classes.
-- [ ] **DOCS-03**: Planning docs in `.planning/codebase/` remain aligned with implemented behavior after roadmap phases.
+- [x] **DOCS-03**: Planning docs in `.planning/codebase/` remain aligned with implemented behavior after roadmap phases.
 
 ## v2 Requirements
 
@@ -61,7 +61,7 @@
 | TEST-03 | Phase 4 | Complete |
 | DOCS-02 | Phase 4 | Complete |
 | DOCS-01 | Phase 5 | Complete |
-| DOCS-03 | Phase 5 | Pending |
+| DOCS-03 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 12 total
