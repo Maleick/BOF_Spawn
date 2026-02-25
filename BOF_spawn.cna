@@ -40,6 +40,7 @@ $block_dll = "true";
 $cfg_disable = "true";
 $use_rwx = "false";      # strict-safe default: RWX is manual opt-in
 $exec = "Hijack RIP Direct"; # strict-safe default: callback requires explicit opt-in
+$debug_mode = "false";
 
 # ================================================================
 # APPLY CONFIGURATION CALLBACK
@@ -56,6 +57,7 @@ sub ApplyConfig {
     $cfg_disable = $3['cfg_box'];
     $use_rwx = $3['use_rwx'];
     $exec = $3['execmem'];
+    $debug_mode = $3['debug_box'];
 
     println("Profile:             strict-safe");
     println("Process name:        $process_spawn");
@@ -66,6 +68,7 @@ sub ApplyConfig {
     println("Disable CFG:         $cfg_disable");
     println("Use RWX:             $use_rwx (manual opt-in)");
     println("Execution method:    $exec");
+    println("Debug diagnostics:   $debug_mode");
     println("=" x 60);
     println("[+] Configuration applied successfully\n");
 }
@@ -90,7 +93,8 @@ sub ProcessConfig {
         blockdll_box => $block_dll, 
         cfg_box => $cfg_disable, 
         use_rwx => $use_rwx, 
-        execmem => $exec), 
+        execmem => $exec,
+        debug_box => $debug_mode),
         &ApplyConfig);
 
     dialog_description($dialog, 
@@ -102,7 +106,8 @@ sub ProcessConfig {
         "Block DLL Policy:    Restrict to Microsoft-signed DLLs only\n" .
         "Disable CFG:         Required only for callback method\n" .
         "Use RWX:             Manual opt-in (default remains RW->RX)\n" .
-        "Execute Method:      Default is Hijack RIP Direct (callback is opt-in)"
+        "Execute Method:      Default is Hijack RIP Direct (callback is opt-in)\n" .
+        "Debug Diagnostics:   Optional on-demand diagnostics (default is off)"
     );
     
     drow_text($dialog, "process_spawn", "Process Name:");
@@ -112,6 +117,7 @@ sub ProcessConfig {
     drow_checkbox($dialog, "blockdll_box", "Block Non-Microsoft DLLs");
     drow_checkbox($dialog, "cfg_box", "Disable CFG");
     drow_checkbox($dialog, "use_rwx", "Use RWX Memory");
+    drow_checkbox($dialog, "debug_box", "Enable Debug Diagnostics");
     drow_combobox($dialog, "execmem", "Execution Method:", 
         @("Hijack RIP Direct", "Hijack RIP Jmp Rax", "Hijack RIP Jmp Rbx", "Hijack RIP Callback"));
 
@@ -139,6 +145,12 @@ sub print_policy_snapshot {
     println("Execution:        $4");
 }
 
+sub debug_log {
+    if (bool_to_int($debug_mode)) {
+        println("[DBG] " . $1);
+    }
+}
+
 # ================================================================
 # HELPER: PREFLIGHT EXECUTION GUARDRAILS
 # ================================================================
@@ -148,8 +160,12 @@ sub preflight_validate_execution {
     $cfg_int = $3;
 
     if ($exec_name iswm "Hijack RIP Callback" && $cfg_int == 0) {
-        berror($bid, "callback blocked (cfg-disable is off) | next: enable CFG-disable, then retry");
+        berror($bid, "callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
         return 0;
+    }
+
+    if ($exec_name iswm "Hijack RIP Callback" && $cfg_int == 1) {
+        println("[!] callback warning | next step: keep CFG-disable enabled for callback execution");
     }
 
     return 1;
@@ -206,6 +222,8 @@ alias spawn_beacon {
     $temp_block_dll = bool_to_int($block_dll);
     $temp_cfg_disable = bool_to_int($cfg_disable);
     $temp_use_rwx = bool_to_int($use_rwx);
+
+    debug_log("spawn_beacon preflight: blockdll=$temp_block_dll cfg=$temp_cfg_disable rwx=$temp_use_rwx exec='$exec'");
 
     if (!preflight_validate_execution($1, $exec, $temp_cfg_disable)) {
         return;
@@ -282,6 +300,8 @@ alias spawn_shellcode {
     $temp_block_dll = bool_to_int($block_dll);
     $temp_cfg_disable = bool_to_int($cfg_disable);
     $temp_use_rwx = bool_to_int($use_rwx);
+
+    debug_log("spawn_shellcode preflight: blockdll=$temp_block_dll cfg=$temp_cfg_disable rwx=$temp_use_rwx exec='$exec'");
 
     if (!preflight_validate_execution($1, $exec, $temp_cfg_disable)) {
         return;
