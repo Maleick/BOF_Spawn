@@ -13,10 +13,14 @@
 
 **Run Commands (current practical verification):**
 ```bash
-make spawn_bof                       # Compile and link BOF artifact locally
-sudo docker build -t ubuntu-gcc-13 .
-sudo docker run --rm -it -v "$PWD":/work -w /work ubuntu-gcc-13:latest make
+bash scripts/check_bof_build.sh --local --container --strict  # TEST-01
+bash scripts/check_pack_contract.sh                            # TEST-02
+bash scripts/check_pack_contract.sh --json                     # TEST-02 machine-readable
 ```
+
+**Manual validation references:**
+- `docs/execution-validation-matrix.md` (`TEST-03`)
+- `docs/ntstatus-troubleshooting.md` (`DOCS-02`)
 
 ## Test File Organization
 
@@ -33,13 +37,18 @@ sudo docker run --rm -it -v "$PWD":/work -w /work ubuntu-gcc-13:latest make
 ## Test Structure (Observed Manual Pattern)
 
 **Compile Validation:**
-1. Build `Bin/bof.o` via `make spawn_bof`.
-2. Confirm output artifact exists and linker step completes.
+1. Run `bash scripts/check_bof_build.sh --local --container --strict`.
+2. Confirm both local and container checks pass with `Bin/bof.o` artifact freshness.
+
+**Contract Validation:**
+1. Run `bash scripts/check_pack_contract.sh`.
+2. Confirm parser-aware schema check reports pack/parse alignment for `ZZZZiiiib`.
 
 **Runtime Validation:**
 1. Load `BOF_spawn.cna` in Cobalt Strike Script Manager.
 2. Run `spawn_beacon <listener>` and/or `spawn_shellcode <path>`.
-3. Inspect Beacon output for success/error callbacks from `Src/Bof.c`.
+3. Follow method order and signal checks from `docs/execution-validation-matrix.md` (`TEST-03`).
+4. Use `docs/ntstatus-troubleshooting.md` (`DOCS-02`) for deterministic failure triage.
 
 ## Mocking
 
@@ -77,7 +86,7 @@ sudo docker run --rm -it -v "$PWD":/work -w /work ubuntu-gcc-13:latest make
 ## Common Gaps To Address
 
 - Missing deterministic tests for `DraugrResolveSyscall` and gadget resolution behavior in `Src/Draugr.c`
-- Missing tests for argument contract consistency between `BOF_spawn.cna` and `go()` parsing in `Src/Bof.c`
+- Add CI automation around existing contract checker (`scripts/check_pack_contract.py`) to reduce manual invocation risk
 - Missing regression tests for each execution mode (`direct`, `jmp rax`, `jmp rbx`, `callback`)
 - Missing negative-path tests for cleanup behavior after partial failures
 

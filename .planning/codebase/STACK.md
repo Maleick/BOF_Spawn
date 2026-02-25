@@ -34,11 +34,16 @@
 - Internal Draugr call-spoofing + indirect syscall layer in `Src/Draugr.c` and `Src/Macros.h`
 
 **Testing:**
-- No automated test framework present in repository
+- Script-driven regression workflow (no full unit-test framework)
+- `scripts/check_bof_build.sh` for build-path validation (`TEST-01`)
+- `scripts/check_pack_contract.sh` and `scripts/check_pack_contract.py` for CNA/BOF schema drift checks (`TEST-02`)
 
 **Build/Dev:**
 - `make` target `spawn_bof` defined in `Makefile`
 - Docker image definition in `Dockerfile` for repeatable toolchain provisioning
+- Documentation-backed operator validation artifacts:
+  - `docs/execution-validation-matrix.md` (`TEST-03`)
+  - `docs/ntstatus-troubleshooting.md` (`DOCS-02`)
 
 ## Key Dependencies
 
