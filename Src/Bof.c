@@ -507,6 +507,15 @@ NTSTATUS	SpawnAndRun(
  * - i: UseRWX (integer)
  * - i: MemExec (integer - execution method)
  * - b: Shellcode (binary data)
+ *
+ * MemExec mapping (must match BOF_spawn.cna):
+ * - 0: Hijack RIP Direct
+ * - 1: Hijack RIP Jmp Rax
+ * - 2: Hijack RIP Jmp Rbx
+ * - 3: Hijack RIP Callback
+ *
+ * @warning Contract-critical order: CNA uses bof_pack("ZZZZiiiib", ...)
+ *          and parser order below MUST remain in lockstep.
  * 
  * @note This function initializes VxTable and Draugr before execution
  */
@@ -547,6 +556,11 @@ void go(
     DisableCfg      = BeaconDataInt(&parser);
     UseRWX          = BeaconDataInt(&parser);
     MemExec         = BeaconDataInt(&parser);
+
+	if (MemExec < HIJACK_RIP_DIRECT || MemExec > HIJACK_RIP_CALLBACK_FUNCTION) {
+		BeaconPrintf(CALLBACK_ERROR, "[!] invalid execution method (%d) | next step: select a supported execution method and retry", MemExec);
+		return;
+	}
 
 /*
     BeaconPrintf(CALLBACK_OUTPUT, "[+] Mitigation Policies:");

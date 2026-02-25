@@ -74,6 +74,34 @@ The BOF provides extensive customization through the CNA script configuration di
 
 **Note on Process Path Format**: The BOF uses NT path format (`\??\C:\...`) for the process name. This is the native format used by `NtCreateUserProcess` and bypasses some Win32 path parsing mechanisms.
 
+## CNA to BOF Argument Mapping Contract
+
+The packing/parsing contract is deterministic and order-sensitive.
+
+- CNA pack format: `bof_pack($bid, "ZZZZiiiib", ...)`
+- BOF parser entrypoint: `Src/Bof.c::go()`
+- Any reorder/type change in CNA must be mirrored in `go()` extraction order.
+
+| Pack Position | Type | CNA Source Field | BOF Parser Target |
+|---------------|------|------------------|-------------------|
+| 1 | `Z` | `process_spawn` | `lpwProcessName = BeaconDataExtract(...)` |
+| 2 | `Z` | `parent_process` | `lpwParentProcessName = BeaconDataExtract(...)` |
+| 3 | `Z` | `working_dir` | `lpwWorkingDir = BeaconDataExtract(...)` |
+| 4 | `Z` | `cmd_line` | `lpwCmdLine = BeaconDataExtract(...)` |
+| 5 | `i` | `block_dll` (int) | `BlockDllPolicy = BeaconDataInt(...)` |
+| 6 | `i` | `cfg_disable` (int) | `DisableCfg = BeaconDataInt(...)` |
+| 7 | `i` | `use_rwx` (int) | `UseRWX = BeaconDataInt(...)` |
+| 8 | `i` | `exec_method` (int) | `MemExec = BeaconDataInt(...)` |
+| 9 | `b` | `shellcode` | `Shellcode = BeaconDataExtract(...)` |
+
+Execution method mapping (CNA string -> `MemExec`):
+- `Hijack RIP Direct` -> `0`
+- `Hijack RIP Jmp Rax` -> `1`
+- `Hijack RIP Jmp Rbx` -> `2`
+- `Hijack RIP Callback` -> `3`
+
+Unknown execution method values are blocked before execution dispatch.
+
 ## Shellcode Execution Methods
 
 ### 1. Direct RIP Hijacking
