@@ -168,6 +168,7 @@ sub resolve_exec_method {
 # ================================================================
 # HELPER: PREFLIGHT EXECUTION GUARDRAILS
 # ================================================================
+# CNA precondition gate runs before thread-context modification; BOF runtime check remains fail-closed backstop.
 sub preflight_validate_execution {
     $bid = $1;
     $exec_name = $2;

@@ -46,6 +46,7 @@ typedef enum {
 
 /**
  * @brief Validates execution preconditions before thread-context modification.
+ * @note This precondition gate is the runtime fail-closed backstop for execution mode safety.
  */
 __attribute__((always_inline)) NTSTATUS ValidateExecutionPreconditions(
 	_In_	EXECUTION	Execute,
